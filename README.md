@@ -63,4 +63,4 @@ SolidWorksTester/
 
 ## License
 
-Proprietary — contact the repository owner for usage terms.
+[GNU General Public License v3.0](LICENSE)
