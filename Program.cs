@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using SolidWorksTester.Services.SolidWorks;
 
 namespace SolidWorksTester
 {
@@ -8,6 +9,7 @@ namespace SolidWorksTester
         [STAThread]
         static void Main()
         {
+            SolidWorksBootstrap.Initialize();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             ApplicationConfiguration.Initialize();

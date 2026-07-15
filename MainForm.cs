@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SolidWorksTester.Services;
+using SolidWorksTester.Services.SolidWorks;
 using SolidWorksTester.UI.Forms;
 using SolidWorksTester.UI.Layout;
 using SolidWorksTester.UI.Views;
@@ -33,6 +35,32 @@ namespace SolidWorksTester
             };
         }
 
+        private const int WmGetMinMaxInfo = 0x0024;
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WmGetMinMaxInfo)
+            {
+                base.WndProc(ref m);
+                FormWindowConstraints.ApplyMinMaxInfo(this, ref m);
+                return;
+            }
+
+            base.WndProc(ref m);
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            FormWindowConstraints.Apply(this);
+        }
+
+        protected override void OnDpiChangedAfterParent(EventArgs e)
+        {
+            base.OnDpiChangedAfterParent(e);
+            FormWindowConstraints.Apply(this);
+        }
+
         private async Task RunBatchAsync()
         {
             string templatePath = _view.TemplateTextBox.Text.Trim();
@@ -57,8 +85,16 @@ namespace SolidWorksTester
                 return;
             }
 
+            if (!SolidWorksBootstrap.TryValidate(out string bootstrapError, out string bootstrapLog))
+            {
+                MessageBox.Show(this, bootstrapError, "SOLIDWORKS Not Found",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             SetRunningState(true);
             _view.LogTextBox.Clear();
+            _view.LogTextBox.AppendText(bootstrapLog.TrimEnd());
             _view.ProgressBar.Maximum = partPaths.Count;
             _view.ProgressBar.Value = 0;
 
@@ -70,10 +106,10 @@ namespace SolidWorksTester
 
             try
             {
-                await Task.Run(() =>
+                await StaTaskRunner.Run(() =>
                 {
-                    AppendLog("Connecting to SOLIDWORKS...");
-                    var connection = SolidWorksConnection.Connect(AppendLog);
+                    AppendLog("Starting batch on SOLIDWORKS STA worker...");
+                    SolidWorks.Interop.sldworks.ISldWorks? swApp = null;
                     var service = new SheetMetalDrawingService();
 
                     for (int i = 0; i < partPaths.Count; i++)
@@ -85,19 +121,39 @@ namespace SolidWorksTester
 
                         try
                         {
+                            if (!File.Exists(partPath))
+                                throw new FileNotFoundException("Part file not found or not accessible.", partPath);
+
+                            swApp = SolidWorksConnection.EnsureConnected(swApp, AppendLog);
+
                             AppendLog("");
                             AppendLog($"=== [{i + 1}/{partPaths.Count}] {partPath} ===");
-                            service.ProcessPart(connection.App, partPath, templatePath, AppendLog);
+                            service.ProcessPart(swApp, partPath, templatePath, AppendLog);
                             successCount++;
                             AppendLog("Done.");
                         }
                         catch (Exception ex)
                         {
                             failCount++;
-                            AppendLog($"ERROR: {ex.Message}");
-                        }
+                            AppendLog($"ERROR: {ExceptionDisplay.GetLogSummary(ex)}");
 
-                        UpdateProgress(i + 1);
+                            if (SolidWorksComException.IsConnectionFailure(ex))
+                            {
+                                swApp = null;
+                                AppendLog("SOLIDWORKS connection reset — will reconnect before the next part.");
+                            }
+                        }
+                        finally
+                        {
+                            try
+                            {
+                                UpdateProgress(i + 1);
+                            }
+                            catch (Exception ex)
+                            {
+                                AppendLog($"Warning: progress update failed: {ExceptionDisplay.GetLogSummary(ex)}");
+                            }
+                        }
                     }
                 }, token);
 
@@ -115,9 +171,11 @@ namespace SolidWorksTester
             }
             catch (Exception ex)
             {
+                string userMessage = ExceptionDisplay.GetUserMessage(ex);
                 UpdateStatus("Critical error.");
-                AppendLog($"Critical error: {ex.Message}");
-                MessageBox.Show(this, ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog($"Critical error: {ExceptionDisplay.GetLogSummary(ex)}");
+                AppendLog(ExceptionDisplay.GetFullDetails(ex));
+                MessageBox.Show(this, userMessage, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -141,22 +199,49 @@ namespace SolidWorksTester
 
         private void AppendLog(string message)
         {
+            if (IsDisposed)
+                return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action<string>(AppendLog), message);
+                if (!IsHandleCreated)
+                    return;
+
+                try
+                {
+                    BeginInvoke(new Action<string>(AppendLog), message);
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Form is closing — ignore late log lines from the worker.
+                }
+
                 return;
             }
 
             if (_view.LogTextBox.TextLength > 0)
-                _view.LogTextBox.AppendText(Environment.NewLine);
+                _view.LogTextBox.AppendText(System.Environment.NewLine);
             _view.LogTextBox.AppendText(message);
         }
 
         private void UpdateStatus(string message)
         {
+            if (IsDisposed)
+                return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action<string>(UpdateStatus), message);
+                if (!IsHandleCreated)
+                    return;
+
+                try
+                {
+                    BeginInvoke(new Action<string>(UpdateStatus), message);
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+
                 return;
             }
 
@@ -165,13 +250,29 @@ namespace SolidWorksTester
 
         private void UpdateProgress(int value)
         {
+            if (IsDisposed)
+                return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action<int>(UpdateProgress), value);
+                if (!IsHandleCreated)
+                    return;
+
+                try
+                {
+                    BeginInvoke(new Action<int>(UpdateProgress), value);
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+
                 return;
             }
 
-            _view.ProgressBar.Value = Math.Min(value, _view.ProgressBar.Maximum);
+            if (_view.ProgressBar.Maximum <= 0)
+                return;
+
+            _view.ProgressBar.Value = Math.Min(Math.Max(value, 0), _view.ProgressBar.Maximum);
         }
     }
 }

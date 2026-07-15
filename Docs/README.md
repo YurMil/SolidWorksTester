@@ -37,6 +37,8 @@ This folder is the **engineering documentation hub** for the codebase. It is sep
 ### SOLIDWORKS COM / API
 
 - [COM connection](solidworks-api/com-connection.md) — attach, launch, UAC, ghost processes
+- [Version router (2022–2026)](solidworks-api/version-router.md) — discovery, interop baseline, capability flags
+- [API version matrix](solidworks-api/versions/version-matrix.md) — per-year API nuances
 - [API reference by area](solidworks-api/api-reference-by-area.md) — methods grouped by workflow
 - [Units & coordinates](solidworks-api/units-and-coordinates.md) — meters, sheet space, tolerances
 

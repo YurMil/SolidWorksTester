@@ -26,7 +26,7 @@ Flat parts without bends do not use the sheet-metal flat pattern view.
 
 For each orthographic view (skips View4):
 
-1. `SmartDimOverall` — overall width/height
+1. `SmartDimOverall` — overall width/height **only on the primary flat-lying view** (`FlatPlateViewAnalyzer.FindPrimaryFlatLyingView` — largest projected bbox among ortho views)
 2. `SmartDimThickness` — gauge (parallel edges)
 3. `SmartDimHoles` — hole diameters
 4. `SmartDimHolePositions` — hole location dims
@@ -63,6 +63,7 @@ See [Round flat plate module](../modules/round-flat-plate.md).
 ```
 Using flat-plate drawing pipeline (3 views + isometric, no flat pattern).
 Round flat plate mode: OD, centerlines, side-view thickness.
+Primary flat view for overall dims: Drawing View2
 ```
 
 ---

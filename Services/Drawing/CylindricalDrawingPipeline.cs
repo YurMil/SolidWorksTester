@@ -1,6 +1,7 @@
 using System;
 using SolidWorks.Interop.sldworks;
 using SolidWorksTester.Cylindrical;
+using SolidWorksTester.Services;
 using SolidWorksTester.Services.Analysis;
 
 namespace SolidWorksTester.Services.Drawing
@@ -25,6 +26,7 @@ namespace SolidWorksTester.Services.Drawing
             DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log);
             DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log);
             DrawingPipelineShared.CreateIsometricView(drawingModel, drawing, partPath, log);
+            DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log);
             ApplyAnnotations(swApp, drawingModel, drawing, analysis, log);
             log("Checking for duplicate dimensions...");
             DrawingDimensionDeduper.RemoveDuplicateDimensions(
@@ -55,6 +57,9 @@ namespace SolidWorksTester.Services.Drawing
 
                 while (dimView != null)
                 {
+                    if (!SolidWorksComException.IsAlive(swApp))
+                        throw new InvalidOperationException("SOLIDWORKS connection lost during cylindrical annotations.");
+
                     string vName = dimView.GetName2();
                     log($"  Centerlines: {vName}");
                     CylindricalDimCenterlines.Add(dimHelper, model, drawing, dimView, log);
@@ -77,6 +82,9 @@ namespace SolidWorksTester.Services.Drawing
                 dimView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
                 while (dimView != null)
                 {
+                    if (!SolidWorksComException.IsAlive(swApp))
+                        throw new InvalidOperationException("SOLIDWORKS connection lost during cylindrical annotations.");
+
                     string vName = dimView.GetName2();
                     bool isIsometric = vName.Equals("Drawing View4", StringComparison.OrdinalIgnoreCase);
 

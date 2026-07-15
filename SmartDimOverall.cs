@@ -56,7 +56,7 @@ namespace SolidWorksTester
             if (topEdge != null && bottomEdge != null && topEdge != bottomEdge)
             {
                 double heightVal = Math.Round(Math.Abs(maxY - minY), 3);
-                string key = $"Overall_{heightVal}";
+                string key = $"Overall_H_{heightVal:F3}_{viewName}";
                 if (!h.DimensionedFeatures.Contains(key))
                 {
                     h.ClearSelection();
@@ -98,7 +98,7 @@ namespace SolidWorksTester
             if (leftEdge != null && rightEdge != null && leftEdge != rightEdge)
             {
                 double widthVal = Math.Round(Math.Abs(maxX - minX), 3);
-                string key = $"Overall_{widthVal}";
+                string key = $"Overall_W_{widthVal:F3}_{viewName}";
                 if (!h.DimensionedFeatures.Contains(key))
                 {
                     h.ClearSelection();

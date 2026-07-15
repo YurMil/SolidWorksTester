@@ -45,7 +45,7 @@ namespace SolidWorksTester.Services
                 }
                 finally
                 {
-                    swApp.CloseDoc(model.GetTitle());
+                    SolidWorksConnection.SafeCloseDocument(swApp, model, log);
                 }
 
                 return;
@@ -95,7 +95,7 @@ namespace SolidWorksTester.Services
             }
             finally
             {
-                swApp.CloseDoc(drawingPath);
+                SolidWorksConnection.SafeCloseDocumentByPath(swApp, drawingPath, log);
             }
         }
 
