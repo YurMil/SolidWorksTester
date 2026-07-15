@@ -35,6 +35,7 @@ namespace SolidWorksTester.Services.Drawing
                 drawingModel, drawing, log, "Drawing View4");
             DrawingPipelineShared.AutoArrangeDimensions(drawingModel, drawing);
             DrawingPipelineShared.AdjustSheetScaleIfNeeded(drawingModel, drawing, log);
+            DrawingPipelineShared.ValidateEstDrawingQuality(drawing, analysis, log);
             drawingModel.ForceRebuild3(true);
         }
 
@@ -52,6 +53,8 @@ namespace SolidWorksTester.Services.Drawing
 
             try
             {
+                PreCacheOrthographicEdges(dimHelper, drawing);
+
                 IView? primaryView = null;
                 IView? dimView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
 
@@ -102,7 +105,20 @@ namespace SolidWorksTester.Services.Drawing
             }
             finally
             {
+                dimHelper.ClearViewCaches();
                 dimHelper.RestoreDimInput();
+            }
+        }
+
+        private static void PreCacheOrthographicEdges(SmartDimHelper dimHelper, IDrawingDoc drawing)
+        {
+            IView? view = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
+            while (view != null)
+            {
+                if (!view.GetName2().Equals("Drawing View4", StringComparison.OrdinalIgnoreCase))
+                    dimHelper.PreCacheViewEdges(view);
+
+                view = view.GetNextView() as IView;
             }
         }
     }

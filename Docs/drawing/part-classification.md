@@ -20,6 +20,11 @@
 | `CylindricalFaceCount` | `int` | Count of cylindrical faces on solids |
 | `IsRoundFlatProfile` | `bool` | Disc-like flat plate (bbox heuristic) |
 | `ActiveConfiguration` | `string` | Config name at analysis time |
+| `IsImportedGeometry` | `bool` | Dumb solid from import (STEP/IGES/Interconnect) |
+| `ImportedShape` | `ImportedGeometryShapeKind` | Recognized form for P-04 dimension strategy |
+| `ImportFeatureCount` | `int` | Import features in FeatureManager tree |
+| `ImportFeatureName` | `string` | Primary import node name (e.g. `Imported1`) |
+| `BboxLongMeters` / `Mid` / `Short` | `double` | Sorted bounding-box axes (meters) |
 
 ---
 
@@ -32,11 +37,13 @@ flowchart TD
     C -->|Yes| D{Bend count > 0?}
     D -->|Yes| E[BentSheetMetal]
     D -->|No| F[FlatPlate]
-    C -->|No| G{Cylindrical geometry?}
-    G -->|Yes| H[Cylindrical]
-    G -->|No| I[FlatPlate]
-    F --> J{IsRoundFlatDisc?}
-    J -->|Yes| K[IsRoundFlatProfile = true]
+    C -->|No| H{Imported body only?}
+    H -->|Yes| I[ImportedGeometry + shape recognizer]
+    H -->|No| G{Cylindrical geometry?}
+    G -->|Yes| J[Cylindrical]
+    G -->|No| K[FlatPlate]
+    F --> L{IsRoundFlatDisc?}
+    L -->|Yes| M[IsRoundFlatProfile = true]
 ```
 
 ---
@@ -72,6 +79,32 @@ flowchart TD
 1. Cylindrical feature in tree **and** ≥ 1 cylindrical face
 2. ≥ 2 cylindrical faces **and** cylindrical ≥ planar face count
 3. ≥ 3 cylindrical faces
+
+---
+
+## Imported geometry detection
+
+Evaluated when **no sheet metal** feature is present.
+
+| Signal | Source |
+| --- | --- |
+| `BodyFeature`, `MBimport`, `SolidBody`, `ImportSolid` | `IFeature.GetTypeName2()` |
+| Name `Imported*` | FeatureManager tree |
+| 3D Interconnect | `IFeature.Is3DInterconnectFeature` |
+
+**Classified as imported** when import feature count &gt; 0 **and** native solid-building feature count = 0.
+
+### Shape kinds (`ImportedGeometryShapeKind`)
+
+| Shape | Typical parts |
+| --- | --- |
+| `ElongatedThinProfile` | Channels, rails, extruded profiles (BTJamb) |
+| `FlatPlateLike` | Imported plates, blanks |
+| `CylindricalLike` | Imported tubes, rods |
+| `BlockyPrismatic` | Blocks, housings |
+| `Unknown` | Fallback — overall + holes |
+
+Detail: [Imported geometry pipeline](pipeline-imported-geometry.md).
 
 ---
 

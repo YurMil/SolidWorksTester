@@ -6,16 +6,19 @@ using SolidWorksTester.Services;
 namespace SolidWorksTester.Cylindrical
 {
     /// <summary>
-    /// Center marks / centerlines for cylindrical parts.
-    /// Strategy is selected by <see cref="SolidWorksCapabilityRouter"/> (2022–2026).
+    /// Center marks on end-face views; centerlines on side views (tube/pipe axis).
     /// </summary>
     public static class CylindricalDimCenterlines
     {
-        private const double MinRadius = 0.0005;
-
         public static void Add(SmartDimHelper h, IModelDoc2 model, IDrawingDoc drawing, IView view, Action<string> log)
         {
             string viewName = view.GetName2();
+
+            if (CylindricalViewAnalyzer.IsIsometricView(view))
+            {
+                log($"  Centerlines skipped in {viewName} (isometric).");
+                return;
+            }
 
             try
             {
@@ -23,50 +26,68 @@ namespace SolidWorksTester.Cylindrical
                     throw new InvalidOperationException("SOLIDWORKS connection lost.");
 
                 drawing.ActivateView(viewName);
+                Edge[] edges = h.GetViewEdgesCached(view);
 
-                Edge[] edges = h.GetViewEdges(view);
-                var profileCircles = edges
-                    .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinRadius)
-                    .OrderByDescending(h.GetCircleRadius)
-                    .ToArray();
-
-                if (profileCircles.Length == 0)
+                if (CylindricalViewAnalyzer.IsEndFaceView(h, view, edges))
                 {
-                    if (CylindricalDimCenterlinesLegacy.TryAddSideViewCenterline(h, model, drawing, view, log))
-                    {
-                        log($"  Centerline added in {viewName} (side-view API).");
+                    if (TryAddEndFaceCenterMarks(h, drawing, view, edges, viewName, log))
                         return;
-                    }
 
-                    log($"  Centerlines skipped in {viewName} (no circular profile or side centerline).");
+                    log($"  Warning: end-face center marks failed in {viewName}, trying centerline fallback.");
+                }
+
+                if (h.HasCenterLineInView(view))
+                {
+                    log($"  Centerline already present in {viewName}.");
                     return;
                 }
 
-                bool added = false;
-                foreach (Edge circle in profileCircles.Take(2))
+                if (CylindricalDimCenterlinesLegacy.TryAddSideViewCenterline(h, model, drawing, view, log))
                 {
-                    if (TryInsertCenterMark(h, drawing, view, circle))
-                        added = true;
+                    log($"  Centerline added in {viewName} (side view).");
+                    return;
                 }
 
-                if (added)
-                    log($"  Center marks added in {viewName}.");
-                else
-                    log($"  Warning: could not add center marks in {viewName}.");
+                log($"  Centerlines skipped in {viewName} (side centerline not created).");
             }
             catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
             {
-                log($"  Warning: center marks failed in {viewName}: {ex.Message}");
+                log($"  Warning: centerlines failed in {viewName}: {ex.Message}");
                 throw;
             }
             catch (Exception ex)
             {
-                log($"  Warning: center marks failed in {viewName}: {ex.Message}");
+                log($"  Warning: centerlines failed in {viewName}: {ex.Message}");
             }
             finally
             {
                 try { h.ClearSelection(); } catch { /* ignore */ }
             }
+        }
+
+        private static bool TryAddEndFaceCenterMarks(
+            SmartDimHelper h,
+            IDrawingDoc drawing,
+            IView view,
+            Edge[] edges,
+            string viewName,
+            Action<string> log)
+        {
+            Edge[] profileCircles = CylindricalViewAnalyzer.GetEndFaceCircles(h, view, edges);
+            if (profileCircles.Length == 0)
+                return false;
+
+            bool added = false;
+            foreach (Edge circle in profileCircles.Take(2))
+            {
+                if (TryInsertCenterMark(h, drawing, view, circle))
+                    added = true;
+            }
+
+            if (added)
+                log($"  Center marks added in {viewName} (end-face view).");
+
+            return added;
         }
 
         private static bool TryInsertCenterMark(SmartDimHelper h, IDrawingDoc drawing, IView view, Edge circle)
