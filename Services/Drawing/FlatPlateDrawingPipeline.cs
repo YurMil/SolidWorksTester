@@ -26,6 +26,7 @@ namespace SolidWorksTester.Services.Drawing
             DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log);
             DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log);
             DrawingPipelineShared.CreateIsometricView(drawingModel, drawing, partPath, log);
+            DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log);
             ApplyDimensions(swApp, drawingModel, drawing, analysis, log);
             log("Checking for duplicate dimensions...");
             DrawingDimensionDeduper.RemoveDuplicateDimensions(
@@ -55,6 +56,13 @@ namespace SolidWorksTester.Services.Drawing
                 if (isRoundProfile)
                     log("Round flat plate mode: OD, centerlines, side-view thickness.");
 
+                IView? primaryFlatView = isRoundProfile
+                    ? null
+                    : FlatPlateViewAnalyzer.FindPrimaryFlatLyingView(dimHelper, drawing);
+
+                if (primaryFlatView != null)
+                    log($"Primary flat view for overall dims: {primaryFlatView.GetName2()}");
+
                 IView? dimView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
 
                 while (dimView != null)
@@ -74,7 +82,9 @@ namespace SolidWorksTester.Services.Drawing
                     }
                     else
                     {
-                        SmartDimOverall.Add(dimHelper, dimView);
+                        if (primaryFlatView == null || ReferenceEquals(dimView, primaryFlatView))
+                            SmartDimOverall.Add(dimHelper, dimView);
+
                         SmartDimThickness.Add(dimHelper, dimView);
                         SmartDimHoles.AddForStandardViews(dimHelper, dimView);
                         SmartDimHolePositions.Add(dimHelper, dimView);

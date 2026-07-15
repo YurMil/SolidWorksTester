@@ -23,6 +23,7 @@ namespace SolidWorksTester.Services.Drawing
             DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log);
             DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log);
             CreateFlatPatternView(drawingModel, drawing, partPath, log);
+            DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log);
             ApplyDimensions(swApp, drawingModel, drawing, log);
             log("Checking for duplicate dimensions...");
             DrawingDimensionDeduper.RemoveDuplicateDimensions(drawingModel, drawing, log);

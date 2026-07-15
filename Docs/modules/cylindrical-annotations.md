@@ -40,6 +40,17 @@ When `PartAnalysisResult.IsHollow` is true:
 
 ---
 
+## Version-specific behavior (2022–2026)
+
+| SOLIDWORKS | Side-view centerlines | End-face center marks |
+| --- | --- | --- |
+| 2022–2024 | Legacy API (`CylindricalDimCenterlinesLegacy`) | Yes |
+| 2025–2026 | Skipped — RPC stability | Yes |
+
+See [Version router](../solidworks-api/version-router.md).
+
+---
+
 ## Extension
 
 New cylindrical annotation types should:

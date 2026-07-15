@@ -39,24 +39,36 @@ namespace SolidWorksTester.UI.Theme
         public static readonly Font LogFont = new("Cascadia Mono", 9F, FontStyle.Regular);
 
         // Layout
-        public const int WindowWidth = 960;
-        public const int WindowHeight = 780;
-        /// <summary>Client area — template field + browse + part side buttons must fit without overlap.</summary>
-        public const int MinWindowWidth = 880;
-        public const int MinWindowHeight = 680;
-        /// <summary>Minimum width for template path row (field + browse + margins).</summary>
-        public const int TemplateRowMinWidth = 420;
-        /// <summary>Minimum width for parts list + side button column.</summary>
-        public const int PartsBodyMinWidth = 480;
-        public const int RootPadding = 20;
+        //
+        // These are logical (96-DPI) values; WinForms scales them with the form. Section heights
+        // are deliberately absent — every content-sized row measures itself, and the window's
+        // minimum size is measured from the live layout (see FormWindowConstraints), so nothing
+        // here has to be kept in sync with what the controls actually need.
+        public const int WindowWidth = 900;
+        public const int WindowHeight = 700;
+
+        public const int RootPadding = 12;
         public const int CardPadding = 16;
         public const int SectionGap = 12;
         public const int ControlHeight = 34;
         public const int CornerRadius = 6;
-        public const int BannerHeight = 52;
-        public const int FooterHeight = 36;
-        public const int SideButtonWidth = 132;
-        public const int SideButtonMinColumnWidth = 120;
+        public const int FooterHeight = 32;
+
+        /// <summary>Minimum width for template path row (field + browse + margins).</summary>
+        public const int TemplateRowMinWidth = 420;
+        /// <summary>Minimum width for parts list + side button column.</summary>
+        public const int PartsBodyMinWidth = 500;
+        /// <summary>Minimum height of the parts card (header + 2x2 button grid + count label + padding).</summary>
+        public const int PartsCardMinHeight = 174;
+        /// <summary>Minimum height of the log card (header + a couple of visible lines + padding).</summary>
+        public const int LogCardMinHeight = 92;
+        /// <summary>Narrowest the content can get before the parts card starts to squeeze.</summary>
+        public const int MinContentWidth = 700;
+
+        /// <summary>Total width of the 2x2 part-action button grid.</summary>
+        public const int SideButtonWidth = 220;
+        /// <summary>Minimum width of a single button in the 2x2 grid.</summary>
+        public const int SideButtonColumnMinWidth = 96;
         public const int BrowseButtonWidth = 96;
         public const int ButtonGap = 6;
     }

@@ -19,7 +19,6 @@ namespace SolidWorksTester.UI.Layout
             host.Text = AppMetadata.ApplicationTitle;
             host.AutoScaleMode = AutoScaleMode.Dpi;
             host.ClientSize = new Size(UiTheme.WindowWidth, UiTheme.WindowHeight);
-            host.MinimumSize = new Size(UiTheme.MinWindowWidth, UiTheme.MinWindowHeight);
             host.StartPosition = FormStartPosition.CenterScreen;
             host.Font = UiTheme.AppFont;
             host.BackColor = UiTheme.AppBackground;
@@ -64,13 +63,22 @@ namespace SolidWorksTester.UI.Layout
                 BackColor = UiTheme.AppBackground
             };
 
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.BannerHeight + 4));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 38F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 80F));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 62F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.FooterHeight));
+            // Title / banner / template / action / footer size themselves from their content, so
+            // they stay correct at any DPI or font scale — a pixel constant here silently clips
+            // the section it is too small for. Only the parts list and the log compete for the
+            // leftover space, split by percent; their cards carry MinimumSize, and the form's
+            // minimum size is derived from this panel's preferred size (see FormWindowConstraints).
+            const float partsRowMin = UiTheme.PartsCardMinHeight + UiTheme.SectionGap;
+            const float logRowMin = UiTheme.LogCardMinHeight + UiTheme.SectionGap;
+            const float partsPercent = partsRowMin / (partsRowMin + logRowMin) * 100F;
+
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, partsPercent));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F - partsPercent));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             return root;
         }
 
@@ -79,12 +87,10 @@ namespace SolidWorksTester.UI.Layout
             var title = new Label
             {
                 Text = AppMetadata.ApplicationTitle,
-                Dock = DockStyle.Fill,
                 Font = UiTheme.TitleFont,
                 ForeColor = UiTheme.TextPrimary,
-                TextAlign = ContentAlignment.BottomLeft,
-                AutoSize = false,
-                Padding = new Padding(0, 0, 0, 4)
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 8)
             };
             root.Controls.Add(title, 0, 0);
         }
@@ -101,18 +107,26 @@ namespace SolidWorksTester.UI.Layout
 
         private static ThemedTextField CreateTemplateSection(TableLayoutPanel root, ToolTip toolTip)
         {
-            var card = new ThemedCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, UiTheme.SectionGap) };
+            var card = new ThemedCard
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, UiTheme.SectionGap),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
 
             var layout = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
                 ColumnCount = 1,
                 RowCount = 3,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight + 4));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var header = UiControlHelper.CreateSectionLabel("Drawing template");
             var caption = UiControlHelper.CreateCaptionLabel("SOLIDWORKS template (.DRWDOT / .SLDDRW)");
@@ -121,8 +135,9 @@ namespace SolidWorksTester.UI.Layout
             {
                 Dock = DockStyle.Fill,
                 BackColor = Color.Transparent,
-                MinimumSize = new Size(UiTheme.TemplateRowMinWidth, UiTheme.ControlHeight + 4),
-                Padding = new Padding(0, 4, 0, 0)
+                Height = UiTheme.ControlHeight,
+                MinimumSize = new Size(UiTheme.TemplateRowMinWidth, UiTheme.ControlHeight),
+                Margin = new Padding(0, 8, 0, 0)
             };
 
             var field = new ThemedTextField(AppMetadata.DefaultTemplatePath)
@@ -159,7 +174,12 @@ namespace SolidWorksTester.UI.Layout
 
         private static (ListBox list, Label countLabel) CreatePartsSection(TableLayoutPanel root)
         {
-            var card = new ThemedCard { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, UiTheme.SectionGap) };
+            var card = new ThemedCard
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, UiTheme.SectionGap),
+                MinimumSize = new Size(UiTheme.PartsBodyMinWidth, UiTheme.PartsCardMinHeight)
+            };
 
             var outer = new TableLayoutPanel
             {
@@ -173,7 +193,6 @@ namespace SolidWorksTester.UI.Layout
             outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var header = UiControlHelper.CreateSectionLabel("Part files");
-            var caption = UiControlHelper.CreateCaptionLabel(".SLDPRT — add files or an entire folder");
 
             var body = new Panel
             {
@@ -182,7 +201,7 @@ namespace SolidWorksTester.UI.Layout
                 Margin = new Padding(0, 6, 0, 0),
                 MinimumSize = new Size(
                     UiTheme.PartsBodyMinWidth,
-                    UiTheme.ControlHeight * 4 + UiTheme.ButtonGap * 3 + 40)
+                    UiTheme.ControlHeight * 2 + UiTheme.ButtonGap + 8)
             };
 
             var listHost = new Panel
@@ -226,14 +245,21 @@ namespace SolidWorksTester.UI.Layout
 
             listHost.Controls.Add(partsListBox);
 
+            // Host fills the right column; the grid inside sits at its top.
+            var sideButtonHost = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = UiTheme.SideButtonWidth,
+                BackColor = Color.Transparent
+            };
+
             var sideButtons = CreatePartButtonsPanel(partsListBox, partsCountLabel);
-            sideButtons.Dock = DockStyle.Right;
-            sideButtons.Width = UiTheme.SideButtonWidth;
-            sideButtons.MinimumSize = new Size(UiTheme.SideButtonMinColumnWidth, 0);
-            sideButtons.MaximumSize = new Size(UiTheme.SideButtonWidth, 0);
+            sideButtons.Dock = DockStyle.Top;
+            sideButtons.Height = UiTheme.ControlHeight * 2 + UiTheme.ButtonGap;
+            sideButtonHost.Controls.Add(sideButtons);
 
             body.Controls.Add(listHost);
-            body.Controls.Add(sideButtons);
+            body.Controls.Add(sideButtonHost);
 
             outer.Controls.Add(header, 0, 0);
             outer.Controls.Add(body, 0, 1);
@@ -244,33 +270,40 @@ namespace SolidWorksTester.UI.Layout
             return (partsListBox, partsCountLabel);
         }
 
+        /// <summary>
+        /// 2x2 grid (rather than a 4-tall single column) so the parts card's minimum height
+        /// stays small enough to fit comfortably on compact displays. Rows are fixed-height and
+        /// the grid is top-aligned, so the buttons stay together instead of drifting apart as
+        /// the window grows — the spare vertical space belongs to the list beside them.
+        /// </summary>
         private static Control CreatePartButtonsPanel(ListBox partsListBox, Label partsCountLabel)
         {
             var panel = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 4,
+                ColumnCount = 2,
+                RowCount = 2,
                 BackColor = Color.Transparent,
                 Margin = new Padding(0),
                 MinimumSize = new Size(
-                    UiTheme.SideButtonMinColumnWidth,
-                    UiTheme.ControlHeight * 4 + UiTheme.ButtonGap * 3)
+                    UiTheme.SideButtonColumnMinWidth * 2 + UiTheme.ButtonGap,
+                    UiTheme.ControlHeight * 2 + UiTheme.ButtonGap)
             };
 
-            for (int i = 0; i < 4; i++)
-                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight + UiTheme.ButtonGap));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight));
 
-            var addFiles = CreateSideButton("Add files");
+            var addFiles = CreateSideButton("Add files", right: true, bottom: true);
             addFiles.Click += (_, _) => AddPartFiles(partsListBox, partsCountLabel);
 
-            var addFolder = CreateSideButton("Add folder");
+            var addFolder = CreateSideButton("Add folder", right: false, bottom: true);
             addFolder.Click += (_, _) => AddPartFolder(partsListBox, partsCountLabel);
 
-            var remove = CreateSideButton("Remove");
+            var remove = CreateSideButton("Remove", right: true, bottom: false);
             remove.Click += (_, _) => RemoveSelectedParts(partsListBox, partsCountLabel);
 
-            var clear = CreateSideButton("Clear all");
+            var clear = CreateSideButton("Clear all", right: false, bottom: false);
             clear.Click += (_, _) =>
             {
                 partsListBox.Items.Clear();
@@ -278,20 +311,20 @@ namespace SolidWorksTester.UI.Layout
             };
 
             panel.Controls.Add(addFiles, 0, 0);
-            panel.Controls.Add(addFolder, 0, 1);
-            panel.Controls.Add(remove, 0, 2);
-            panel.Controls.Add(clear, 0, 3);
+            panel.Controls.Add(addFolder, 1, 0);
+            panel.Controls.Add(remove, 0, 1);
+            panel.Controls.Add(clear, 1, 1);
             return panel;
         }
 
-        private static ThemedButton CreateSideButton(string text) =>
+        private static ThemedButton CreateSideButton(string text, bool right, bool bottom) =>
             new()
             {
                 Text = text,
                 Variant = ButtonVariant.Subtle,
                 Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 0, UiTheme.ButtonGap),
-                MinimumSize = new Size(UiTheme.SideButtonMinColumnWidth, 28)
+                Margin = new Padding(0, 0, right ? UiTheme.ButtonGap : 0, bottom ? UiTheme.ButtonGap : 0),
+                MinimumSize = new Size(UiTheme.SideButtonColumnMinWidth, UiTheme.ControlHeight)
             };
 
         private static (ThemedButton run, ThemedButton cancel, Label status, ThemedProgressBar progress)
@@ -299,19 +332,22 @@ namespace SolidWorksTester.UI.Layout
         {
             var panel = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
                 ColumnCount = 1,
                 RowCount = 2,
                 BackColor = Color.Transparent,
-                Margin = new Padding(0, 0, 0, UiTheme.SectionGap)
+                Margin = new Padding(0, 0, 0, UiTheme.SectionGap),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight + 10));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 6));
+            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var topRow = new Panel
             {
                 Dock = DockStyle.Fill,
                 BackColor = Color.Transparent,
+                Height = UiTheme.ControlHeight,
                 MinimumSize = new Size(340, UiTheme.ControlHeight)
             };
 
@@ -358,6 +394,7 @@ namespace SolidWorksTester.UI.Layout
             {
                 Dock = DockStyle.Fill,
                 Height = 4,
+                Margin = new Padding(0, 8, 0, 0),
                 Maximum = 100,
                 Value = 0
             };
@@ -375,7 +412,8 @@ namespace SolidWorksTester.UI.Layout
             {
                 Dock = DockStyle.Fill,
                 BackColor = UiTheme.LogBackground,
-                Margin = new Padding(0, 0, 0, UiTheme.SectionGap)
+                Margin = new Padding(0, 0, 0, UiTheme.SectionGap),
+                MinimumSize = new Size(UiTheme.PartsBodyMinWidth, UiTheme.LogCardMinHeight)
             };
 
             var layout = new TableLayoutPanel
@@ -403,12 +441,21 @@ namespace SolidWorksTester.UI.Layout
 
         private static (Label author, LinkLabel versionLink) CreateFooterSection(TableLayoutPanel root)
         {
-            var footer = new Panel
+            // Anchored columns rather than hand-placed Locations, so the version link tracks the
+            // right edge on its own and the row height follows the caption font at any DPI.
+            var footer = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
                 BackColor = Color.Transparent,
-                Padding = new Padding(0, 8, 0, 0)
+                Padding = new Padding(0, 8, 0, 0),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            footer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             footer.Paint += (_, e) =>
             {
                 using var pen = new Pen(UiTheme.Border);
@@ -419,29 +466,29 @@ namespace SolidWorksTester.UI.Layout
             {
                 Text = AppMetadata.FooterAuthorText,
                 AutoSize = true,
+                Anchor = AnchorStyles.Left,
                 ForeColor = UiTheme.TextMuted,
                 Font = UiTheme.CaptionFont,
-                Location = new Point(0, 10)
+                Margin = new Padding(0, 2, 0, 0)
             };
 
             var versionLink = new LinkLabel
             {
                 Text = AppMetadata.VersionDisplay,
                 AutoSize = true,
+                Anchor = AnchorStyles.Right,
                 ForeColor = UiTheme.Accent,
                 LinkColor = UiTheme.Accent,
                 ActiveLinkColor = UiTheme.AccentHover,
                 VisitedLinkColor = UiTheme.Accent,
                 LinkBehavior = LinkBehavior.HoverUnderline,
                 Font = UiTheme.CaptionFont,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 2, 0, 0)
             };
-            versionLink.Location = new Point(footer.Width - 60, 10);
-            footer.Resize += (_, _) =>
-                versionLink.Location = new Point(footer.Width - versionLink.Width, 10);
 
-            footer.Controls.Add(authorLabel);
-            footer.Controls.Add(versionLink);
+            footer.Controls.Add(authorLabel, 0, 0);
+            footer.Controls.Add(versionLink, 1, 0);
             root.Controls.Add(footer, 0, 6);
 
             return (authorLabel, versionLink);

@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 using SolidWorks.Interop.sldworks;
+using SolidWorksTester.Services.SolidWorks;
 
 namespace SolidWorksTester.Services
 {
@@ -53,10 +55,95 @@ namespace SolidWorksTester.Services
                 swApp.Visible = true;
                 isNewInstance = true;
                 Write("New SOLIDWORKS instance started.");
+                WaitForSolidWorksReady(swApp, Write);
             }
 
             Write($"SOLIDWORKS version: {swApp.RevisionNumber()}");
+
+            try
+            {
+                string revision = swApp.RevisionNumber();
+                SolidWorksInstallInfo? install = SolidWorksInstallDiscovery.DiscoverBest();
+                SolidWorksVersionContext.UpdateFromRunningInstance(revision, install);
+                Write(SolidWorksVersionContext.Current.Summary);
+                Write(SolidWorksCapabilityRouter.GetStrategyNotes());
+            }
+            catch (Exception ex)
+            {
+                Write($"Warning: could not update version router: {ex.Message}");
+            }
+
             return new SolidWorksConnectionResult { App = swApp, IsNewInstance = isNewInstance };
+        }
+
+        /// <summary>Returns a live <see cref="ISldWorks"/> instance, reconnecting if the previous one died.</summary>
+        public static ISldWorks EnsureConnected(ISldWorks? current, Action<string>? log = null)
+        {
+            if (SolidWorksComException.IsAlive(current))
+                return current!;
+
+            if (current != null)
+                log?.Invoke("SOLIDWORKS COM connection lost — reconnecting...");
+
+            return Connect(log).App;
+        }
+
+        private static void WaitForSolidWorksReady(ISldWorks swApp, Action<string> write)
+        {
+            for (int attempt = 0; attempt < 20; attempt++)
+            {
+                try
+                {
+                    _ = swApp.RevisionNumber();
+                    return;
+                }
+                catch
+                {
+                    Thread.Sleep(500);
+                }
+            }
+
+            write("Warning: SOLIDWORKS started but API may not be fully ready yet.");
+        }
+
+        public static void SafeCloseDocument(ISldWorks swApp, IModelDoc2? model, Action<string>? log = null)
+        {
+            if (model == null)
+                return;
+
+            try
+            {
+                string title = model.GetTitle();
+                if (!string.IsNullOrWhiteSpace(title))
+                    swApp.CloseDoc(title);
+            }
+            catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
+            {
+                log?.Invoke($"Warning: could not close document (COM unavailable): {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                log?.Invoke($"Warning: could not close document: {ex.Message}");
+            }
+        }
+
+        public static void SafeCloseDocumentByPath(ISldWorks swApp, string path, Action<string>? log = null)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            try
+            {
+                swApp.CloseDoc(path);
+            }
+            catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
+            {
+                log?.Invoke($"Warning: could not close document (COM unavailable): {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                log?.Invoke($"Warning: could not close document: {ex.Message}");
+            }
         }
 
         private static void CleanupGhostProcesses(Action<string> write)
@@ -73,6 +160,7 @@ namespace SolidWorksTester.Services
                         write($"Terminating background SOLIDWORKS process (PID: {proc.Id})...");
                         proc.Kill();
                         proc.WaitForExit(3000);
+                        Thread.Sleep(1500);
                     }
                     catch (Exception ex)
                     {
