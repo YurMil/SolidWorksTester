@@ -14,6 +14,7 @@ namespace SolidWorksTester.RoundFlatPlate
             Edge[] edges = h.GetViewEdges(view);
             var profileCircles = edges
                 .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinRadiusMeters)
+                .Where(e => h.IsCircleProfileInView(e, view))
                 .ToArray();
 
             if (profileCircles.Length == 0)
@@ -24,10 +25,11 @@ namespace SolidWorksTester.RoundFlatPlate
                 return true;
 
             Edge outer = profileCircles.OrderByDescending(h.GetCircleRadius).First();
-            double outerRadius = h.GetCircleRadius(outer);
+            double outerDiameterSheet = h.GetCircleRadius(outer) * 2.0 * view.ScaleDecimal;
             double longestLinear = linear.Max(e => h.GetProjectedLength(e, view));
 
-            return outerRadius * 2.0 > longestLinear * 2.0;
+            // Disc face: outer diameter dominates over any linear edge length in the view.
+            return outerDiameterSheet > longestLinear * 1.5;
         }
 
         public static Edge? GetOuterProfileCircle(SmartDimHelper h, IView view)

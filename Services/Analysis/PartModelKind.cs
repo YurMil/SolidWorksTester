@@ -4,6 +4,7 @@ namespace SolidWorksTester.Services.Analysis
     {
         BentSheetMetal,
         FlatPlate,
-        Cylindrical
+        Cylindrical,
+        ImportedGeometry
     }
 }

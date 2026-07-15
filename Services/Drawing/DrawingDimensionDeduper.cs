@@ -89,17 +89,20 @@ namespace SolidWorksTester.Services.Drawing
         }
 
         /// <summary>
-        /// Removes "2x Ø..." style dimensions when the same diameter already exists
-        /// without a quantity prefix (typical false positive on pipe end faces).
+        /// Resolves conflict between bare Ød and "Nx Ød" callouts.
+        /// <paramref name="preferQuantityPrefix"/> true (flanges): keep Nx, delete bare.
+        /// false (pipes): keep bare, delete Nx false-positives.
         /// </summary>
         public static void RemoveQuantityPrefixedDiameterDuplicates(
             IModelDoc2 model,
             IDrawingDoc drawing,
             Action<string> log,
+            bool preferQuantityPrefix,
             params string[] skipViewNames)
         {
             var skipViews = new HashSet<string>(skipViewNames, StringComparer.OrdinalIgnoreCase);
             var plainDiameterKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var quantityDiameterKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var toDelete = new List<IAnnotation>();
 
             IView? view = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
@@ -107,7 +110,10 @@ namespace SolidWorksTester.Services.Drawing
             {
                 string viewName = view.GetName2();
                 if (!skipViews.Contains(viewName))
+                {
                     CollectPlainDiameterKeys(view, plainDiameterKeys);
+                    CollectQuantityDiameterKeys(view, quantityDiameterKeys);
+                }
 
                 view = view.GetNextView() as IView;
             }
@@ -117,7 +123,12 @@ namespace SolidWorksTester.Services.Drawing
             {
                 string viewName = view.GetName2();
                 if (!skipViews.Contains(viewName))
-                    CollectQuantityPrefixedDuplicates(view, plainDiameterKeys, toDelete);
+                {
+                    if (preferQuantityPrefix)
+                        CollectBareDuplicatesWhenQuantityExists(view, quantityDiameterKeys, toDelete);
+                    else
+                        CollectQuantityPrefixedDuplicates(view, plainDiameterKeys, toDelete);
+                }
 
                 view = view.GetNextView() as IView;
             }
@@ -132,8 +143,19 @@ namespace SolidWorksTester.Services.Drawing
             model.Extension.DeleteSelection2((int)swDeleteSelectionOptions_e.swDelete_Absorbed);
             model.ClearSelection2(true);
 
-            log($"  Removed {toDelete.Count} quantity-prefixed duplicate diameter(s) (e.g. 2x Ø).");
+            log(preferQuantityPrefix
+                ? $"  Removed {toDelete.Count} bare diameter(s) kept quantity callout(s)."
+                : $"  Removed {toDelete.Count} quantity-prefixed duplicate diameter(s) (e.g. 2x Ø).");
         }
+
+        /// <summary>Pipe-safe default: drop false "Nx Ø" when a bare Ø already exists.</summary>
+        public static void RemoveQuantityPrefixedDiameterDuplicates(
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            Action<string> log,
+            params string[] skipViewNames) =>
+            RemoveQuantityPrefixedDiameterDuplicates(
+                model, drawing, log, preferQuantityPrefix: false, skipViewNames);
 
         private static void CollectPlainDiameterKeys(IView view, HashSet<string> keys)
         {
@@ -147,6 +169,46 @@ namespace SolidWorksTester.Services.Drawing
                         !HasQuantityPrefix(displayDim) &&
                         TryGetDiameterKey(displayDim, out string key))
                         keys.Add(key);
+                }
+
+                ann = ann.GetNext3();
+            }
+        }
+
+        private static void CollectQuantityDiameterKeys(IView view, HashSet<string> keys)
+        {
+            Annotation? ann = view.GetFirstAnnotation3();
+            while (ann != null)
+            {
+                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
+                {
+                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
+                    if (displayDim != null &&
+                        HasQuantityPrefix(displayDim) &&
+                        TryGetDiameterKey(displayDim, out string key))
+                        keys.Add(key);
+                }
+
+                ann = ann.GetNext3();
+            }
+        }
+
+        private static void CollectBareDuplicatesWhenQuantityExists(
+            IView view,
+            HashSet<string> quantityDiameterKeys,
+            List<IAnnotation> toDelete)
+        {
+            Annotation? ann = view.GetFirstAnnotation3();
+            while (ann != null)
+            {
+                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
+                {
+                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
+                    if (displayDim != null &&
+                        !HasQuantityPrefix(displayDim) &&
+                        TryGetDiameterKey(displayDim, out string key) &&
+                        quantityDiameterKeys.Contains(key))
+                        toDelete.Add(ann);
                 }
 
                 ann = ann.GetNext3();

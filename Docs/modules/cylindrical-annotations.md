@@ -13,7 +13,9 @@ Annotation modules for pipes, tubes, and revolved/swept cylindrical parts. **Not
 
 | Class | Purpose |
 | --- | --- |
-| `CylindricalDimCenterlines` | Center marks / axis lines on circular views |
+| `CylindricalViewAnalyzer` | End-face vs side-view detection (`IsCircleProfileInView` + bbox aspect) |
+| `CylindricalDimCenterlines` | Center marks on end-face views; **centerlines** on side views |
+| `CylindricalDimCenterlinesLegacy` | Parallel outer edges, bbox midline, cylindrical face pick |
 | `CylindricalDimSizes` | OD, ID, overall length; end-face view handling |
 | `CylindricalDimHoles` | Hole features on cylindrical shells |
 | `CylindricalDimImport` | Propagate or align with model annotations where applicable |
@@ -40,12 +42,23 @@ When `PartAnalysisResult.IsHollow` is true:
 
 ---
 
+## Centerlines vs center marks
+
+| View type | Detection | Annotation |
+| --- | --- | --- |
+| **End face** | Full circles with axis ⊥ view; bbox ≈ OD (not elongated) | `InsertCenterMark2` on OD (and ID if hollow) |
+| **Side view** | Elongated bbox (length >> OD) | `InsertCenterLine2` between parallel outer edges |
+| **Isometric** | View4 | Skipped |
+
+Side-view centerline fallbacks (in order): outer parallel edges → longest parallel pair → bbox midline → cylindrical face pick.
+
+---
+
 ## Version-specific behavior (2022–2026)
 
 | SOLIDWORKS | Side-view centerlines | End-face center marks |
 | --- | --- | --- |
-| 2022–2024 | Legacy API (`CylindricalDimCenterlinesLegacy`) | Yes |
-| 2025–2026 | Skipped — RPC stability | Yes |
+| 2022–2026 | Outer-edge / bbox / face API (no silhouette) | Yes |
 
 See [Version router](../solidworks-api/version-router.md).
 

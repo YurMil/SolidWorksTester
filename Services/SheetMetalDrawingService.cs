@@ -4,6 +4,7 @@ using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorksTester.Services.Analysis;
 using SolidWorksTester.Services.Drawing;
+using SolidWorksTester.Services.Drawing.Routing;
 
 namespace SolidWorksTester.Services
 {
@@ -111,23 +112,8 @@ namespace SolidWorksTester.Services
                 0,
                 (int)swUnitSystem_e.swUnitSystem_MMGS);
 
-            switch (analysis.Kind)
-            {
-                case PartModelKind.FlatPlate:
-                    FlatPlateDrawingPipeline.Process(swApp, model, partPath, analysis, log);
-                    break;
-
-                case PartModelKind.BentSheetMetal:
-                    BentSheetMetalDrawingPipeline.Process(swApp, model, partPath, log);
-                    break;
-
-                case PartModelKind.Cylindrical:
-                    CylindricalDrawingPipeline.Process(swApp, model, partPath, analysis, log);
-                    break;
-
-                default:
-                    throw new InvalidOperationException($"Unsupported part kind: {analysis.Kind}");
-            }
+            DrawingRouteDecision route = DrawingPipelineRouter.Resolve(analysis, log);
+            DrawingPipelineExecutor.Execute(swApp, model, partPath, analysis, route, log);
         }
 
         private static void SaveDrawingToPath(IModelDoc2 model, string drawingPath, Action<string> log)

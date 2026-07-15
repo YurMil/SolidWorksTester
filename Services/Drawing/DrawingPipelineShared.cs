@@ -1,6 +1,7 @@
 using System;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using SolidWorksTester.Services.Analysis;
 
 namespace SolidWorksTester.Services.Drawing
 {
@@ -192,6 +193,18 @@ namespace SolidWorksTester.Services.Drawing
                 "Default",
                 false,
                 0, 0, 0, 0, 0, 0);
+        }
+
+        public static void ValidateEstDrawingQuality(
+            IDrawingDoc drawing,
+            PartAnalysisResult analysis,
+            Action<string> log)
+        {
+            if (!analysis.EstProperties.HasAnyDimension)
+                return;
+
+            log("Checking EST dimension quality...");
+            EstDrawingQualityValidator.ValidateAndLog(analysis, drawing, log);
         }
     }
 }

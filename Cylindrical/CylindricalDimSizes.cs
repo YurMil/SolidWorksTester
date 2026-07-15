@@ -80,22 +80,66 @@ namespace SolidWorksTester.Cylindrical
             if (linear.Length == 0)
                 return;
 
+            var (minX, minY, maxX, maxY) = h.ComputeEdgesBoundingBox(edges, view);
+            double bboxWidth = maxX - minX;
+            double bboxHeight = maxY - minY;
+            double minSpan = Math.Max(bboxWidth, bboxHeight) * 0.55;
+
             var vertical = linear.Where(e => h.IsVerticalInView(e, view)).ToArray();
-            if (vertical.Length >= 2)
+            if (vertical.Length >= 2 &&
+                TryLongestParallelPair(h, view, vertical, vertical: true, minSpan, out Edge vA, out Edge vB))
             {
-                Edge top = vertical.OrderByDescending(e => h.GetEdgeMidpointOnSheet(e, view)[1]).First();
-                Edge bottom = vertical.OrderBy(e => h.GetEdgeMidpointOnSheet(e, view)[1]).First();
-                TryLinearDimension(h, view, viewName, top, bottom, "Length", log);
+                TryLinearDimension(h, view, viewName, vA, vB, "Length", log);
                 return;
             }
 
             var horizontal = linear.Where(e => h.IsHorizontalInView(e, view)).ToArray();
-            if (horizontal.Length >= 2)
+            if (horizontal.Length >= 2 &&
+                TryLongestParallelPair(h, view, horizontal, vertical: false, minSpan, out Edge hA, out Edge hB))
             {
-                Edge right = horizontal.OrderByDescending(e => h.GetEdgeMidpointOnSheet(e, view)[0]).First();
-                Edge left = horizontal.OrderBy(e => h.GetEdgeMidpointOnSheet(e, view)[0]).First();
-                TryLinearDimension(h, view, viewName, right, left, "Length", log);
+                TryLinearDimension(h, view, viewName, hA, hB, "Length", log);
             }
+        }
+
+        private static bool TryLongestParallelPair(
+            SmartDimHelper h,
+            IView view,
+            Edge[] edges,
+            bool vertical,
+            double minSpan,
+            out Edge edgeA,
+            out Edge edgeB)
+        {
+            edgeA = null!;
+            edgeB = null!;
+            double bestSpan = 0;
+
+            Func<Edge, double> coord = e => vertical
+                ? h.GetEdgeMidpointOnSheet(e, view)[1]
+                : h.GetEdgeMidpointOnSheet(e, view)[0];
+
+            var longEdges = edges
+                .Where(e => h.GetProjectedLength(e, view) >= minSpan * 0.5)
+                .ToArray();
+
+            if (longEdges.Length < 2)
+                return false;
+
+            for (int i = 0; i < longEdges.Length; i++)
+            {
+                for (int j = i + 1; j < longEdges.Length; j++)
+                {
+                    double span = Math.Abs(coord(longEdges[j]) - coord(longEdges[i]));
+                    if (span >= minSpan && span > bestSpan)
+                    {
+                        bestSpan = span;
+                        edgeA = longEdges[i];
+                        edgeB = longEdges[j];
+                    }
+                }
+            }
+
+            return bestSpan > 0;
         }
 
         private static void TryDiameterDimension(
