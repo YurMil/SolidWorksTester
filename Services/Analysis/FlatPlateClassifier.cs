@@ -1,3 +1,4 @@
+using SolidWorksTester.ArcSector;
 using SolidWorksTester.Services.Analysis.BafflePlate;
 using SolidWorksTester.Services.Analysis.FlangeGasket;
 
@@ -23,6 +24,9 @@ namespace SolidWorksTester.Services.Analysis
 
             if (isRoundedEndFlatProfile)
                 return FlatPlateSubKind.RoundedEnd;
+
+            if (ArcSectorModelAnalyzer.IsArcSectorPlate(snap))
+                return FlatPlateSubKind.ArcSector;
 
             return FlatPlateSubKind.Generic;
         }

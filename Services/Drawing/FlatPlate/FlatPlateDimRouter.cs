@@ -1,5 +1,6 @@
 using System;
 using SolidWorks.Interop.sldworks;
+using SolidWorksTester.ArcSector;
 using SolidWorksTester.BafflePlate;
 using SolidWorksTester.FlangeGasket;
 using SolidWorksTester.RoundFlatPlate;
@@ -90,6 +91,14 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                         RoundedFlatPlateDimensions.AddForPrimaryView(dimHelper, drawing, view, log);
                     else
                         RoundedFlatPlateDimensions.AddSideViewOnly(
+                            dimHelper, view, log, context.ExpectedThicknessMm);
+                    break;
+
+                case FlatPlateSubKind.ArcSector:
+                    if (isPrimary)
+                        ArcSectorDimensionPipeline.AddForPrimaryView(dimHelper, drawing, view, log);
+                    else
+                        ArcSectorDimensionPipeline.AddSideViewOnly(
                             dimHelper, view, log, context.ExpectedThicknessMm);
                     break;
 
