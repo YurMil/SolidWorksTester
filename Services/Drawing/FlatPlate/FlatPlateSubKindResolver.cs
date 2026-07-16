@@ -1,4 +1,5 @@
 using SolidWorks.Interop.sldworks;
+using SolidWorksTester.ArcSector;
 using SolidWorksTester.FlangeGasket;
 using SolidWorksTester.RoundFlatPlate;
 using SolidWorksTester.Services.Analysis;
@@ -24,6 +25,10 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
 
             if (TryResolveFlangeOverride(analysis, route, dimHelper, drawing, out FlatPlateDimContext? flangeContext))
                 return flangeContext!;
+
+            // Arc-sector before property Generic / rounded-end — concentric arcs win over "PLATE".
+            if (TryResolveArcSectorOverride(analysis, route, dimHelper, drawing, out FlatPlateDimContext? arcContext))
+                return arcContext!;
 
             if (route.ForcedFlatPlateSubKind is FlatPlateSubKind forced && forced != FlatPlateSubKind.Unknown)
                 return BuildFromSubKind(forced, dimHelper, drawing);
@@ -60,6 +65,9 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                     PrimaryFlatView = null
                 };
             }
+
+            if (ArcSectorViewAnalyzer.DetectFromDrawing(dimHelper, drawing))
+                return BuildFromSubKind(FlatPlateSubKind.ArcSector, dimHelper, drawing);
 
             bool isRoundedEnd = analysis.IsRoundedEndFlatProfile ||
                 RoundedFlatPlateViewAnalyzer.DetectFromDrawing(dimHelper, drawing);
@@ -99,7 +107,8 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
 
             // Do not override an explicit non-baffle dedicated sub-kind (except Generic/Unknown).
             FlatPlateSubKind forced = route.ForcedFlatPlateSubKind ?? analysis.FlatPlateSubKind;
-            if (forced is FlatPlateSubKind.FlangeGasket or FlatPlateSubKind.RoundDisc or FlatPlateSubKind.RoundedEnd)
+            if (forced is FlatPlateSubKind.FlangeGasket or FlatPlateSubKind.RoundDisc or FlatPlateSubKind.RoundedEnd
+                or FlatPlateSubKind.ArcSector)
                 return false;
 
             context = BuildFromSubKind(FlatPlateSubKind.BafflePlate, dimHelper, drawing);
@@ -133,6 +142,40 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                 return false;
 
             context = BuildFromSubKind(FlatPlateSubKind.FlangeGasket, dimHelper, drawing);
+            return true;
+        }
+
+        private static bool TryResolveArcSectorOverride(
+            PartAnalysisResult analysis,
+            DrawingRouteDecision route,
+            SmartDimHelper dimHelper,
+            IDrawingDoc drawing,
+            out FlatPlateDimContext? context)
+        {
+            context = null;
+
+            if (analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                analysis.FlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.FlangeGasket ||
+                analysis.FlatPlateSubKind == FlatPlateSubKind.FlangeGasket)
+            {
+                return false;
+            }
+
+            FlatPlateSubKind forced = route.ForcedFlatPlateSubKind ?? analysis.FlatPlateSubKind;
+            if (forced is FlatPlateSubKind.RoundDisc or FlatPlateSubKind.FlangeGasket
+                or FlatPlateSubKind.BafflePlate)
+            {
+                return false;
+            }
+
+            bool geometry = analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.ArcSector ||
+                            analysis.FlatPlateSubKind == FlatPlateSubKind.ArcSector;
+            bool drawingHit = ArcSectorViewAnalyzer.DetectFromDrawing(dimHelper, drawing);
+            if (!geometry && !drawingHit)
+                return false;
+
+            context = BuildFromSubKind(FlatPlateSubKind.ArcSector, dimHelper, drawing);
             return true;
         }
 
@@ -183,6 +226,13 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                         PrimaryFlatView = FlatPlateViewAnalyzer.FindPrimaryFlatLyingView(dimHelper, drawing)
                     };
 
+                case FlatPlateSubKind.ArcSector:
+                    return new FlatPlateDimContext
+                    {
+                        SubKind = FlatPlateSubKind.ArcSector,
+                        PrimaryFlatView = FlatPlateViewAnalyzer.FindPrimaryFlatLyingView(dimHelper, drawing)
+                    };
+
                 default:
                     return new FlatPlateDimContext
                     {
@@ -199,6 +249,8 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             FlatPlateSubKind.FlangeGasket => "Flange/gasket mode: OD, ID, BCD, pattern angle, hole qty, thickness.",
             FlatPlateSubKind.RoundDisc => "Round flat plate mode: OD, centerlines, side-view thickness.",
             FlatPlateSubKind.RoundedEnd => "Rounded-end flat plate mode: overall, outer arc, holes, thickness.",
+            FlatPlateSubKind.ArcSector =>
+                "Arc-sector plate mode: R_in/R_out, angle or radial strip, bbox, hole Ø + 2 coords, thickness.",
             _ => "Generic flat plate mode: overall, thickness, holes."
         };
     }

@@ -287,6 +287,8 @@ namespace SolidWorksTester.Services.Analysis
                 "FLANGE" or "GASKET" or "FLANGE_GASKET" => Assign(FlatPlateSubKind.FlangeGasket, out subKind),
                 "BAFFLE" or "BAFFLE_PLATE" or "PERFORATED" or "TUBE_SHEET" or "TUBESHEET"
                     => Assign(FlatPlateSubKind.BafflePlate, out subKind),
+                "ARC" or "SECTOR" or "ARC_SECTOR" or "ANNULAR" or "RING_SEGMENT"
+                    => Assign(FlatPlateSubKind.ArcSector, out subKind),
                 "GENERIC" or "PLATE" => Assign(FlatPlateSubKind.Generic, out subKind),
                 _ => false
             };

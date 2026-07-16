@@ -9,6 +9,8 @@ namespace SolidWorksTester.Services.Analysis
         RoundedEnd,
         FlangeGasket,
         /// <summary>Sheet-metal baffle / tube-sheet style plate with a dense hole array.</summary>
-        BafflePlate
+        BafflePlate,
+        /// <summary>Flat annular sector: concentric inner/outer arcs + radial ends (not a tube).</summary>
+        ArcSector
     }
 }

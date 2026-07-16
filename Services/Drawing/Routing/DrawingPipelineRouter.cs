@@ -112,6 +112,10 @@ namespace SolidWorksTester.Services.Drawing.Routing
                 analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.BafflePlate)
                 return FlatPlateSubKind.BafflePlate;
 
+            if (analysis.FlatPlateSubKind == FlatPlateSubKind.Generic &&
+                analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.ArcSector)
+                return FlatPlateSubKind.ArcSector;
+
             return analysis.FlatPlateSubKind;
         }
 

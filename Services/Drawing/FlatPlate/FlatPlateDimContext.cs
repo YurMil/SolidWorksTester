@@ -30,9 +30,11 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             SubKind is FlatPlateSubKind.RoundDisc
                 or FlatPlateSubKind.RoundedEnd
                 or FlatPlateSubKind.FlangeGasket
-                or FlatPlateSubKind.BafflePlate;
+                or FlatPlateSubKind.BafflePlate
+                or FlatPlateSubKind.ArcSector;
 
         public bool SkipsModelImport =>
-            SubKind is FlatPlateSubKind.RoundDisc;
+            SubKind is FlatPlateSubKind.RoundDisc
+                or FlatPlateSubKind.ArcSector;
     }
 }
