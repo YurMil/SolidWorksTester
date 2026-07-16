@@ -19,6 +19,17 @@ namespace SolidWorksTester
         public bool SelectFace(Face2 face, IView view, bool append) =>
             TrySelectEntity((Entity)face, view, append);
 
+        /// <summary>Selects an edge at a specific sheet point (useful for arc max/min conditions).</summary>
+        public bool SelectEdgeAtPoint(Edge edge, IView view, double[] sheetPoint, bool append)
+        {
+            ActivateView(view);
+            SelectData sd = CreateViewSelectData(view);
+            sd.X = sheetPoint[0];
+            sd.Y = sheetPoint[1];
+            if (sheetPoint.Length > 2) sd.Z = sheetPoint[2];
+            return ((Entity)edge).Select4(append, sd);
+        }
+
         /// <summary>Selects a sketch segment (e.g. bend line) in a drawing view.</summary>
         public bool SelectSketchSegment(SketchSegment seg, IView view, bool append)
         {

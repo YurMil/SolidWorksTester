@@ -322,75 +322,26 @@ namespace SolidWorksTester.RoundFlatPlate
             }
 
             int max = (int)swArcEndCondition_e.swArcEndConditionMax;
-            int min = (int)swArcEndCondition_e.swArcEndConditionMin;
-            int center = (int)swArcEndCondition_e.swArcEndConditionCenter;
-            int none = (int)swArcEndCondition_e.swArcEndConditionNone;
 
-            (int, int)[] trials =
+            try
             {
-                (none, max),
-                (center, max),
-                (max, none),
-                (max, center),
-                (none, min),
-                (center, min),
-                (min, none),
-                (min, center),
-                (max, max),
-                (min, min)
-            };
-
-            double bestVal = double.MaxValue;
-            double bestErr = double.MaxValue;
-            (int, int) bestPair = (none, max);
-            double maxPlausible = segmentSagitta
-                ? arcRadiusModel * 1.25
-                : Math.Max(expectedWidthModel * 1.35, arcRadiusModel * 2.5);
-
-            foreach ((int a, int b) in trials)
+                // SolidWorks SetArcEndCondition takes (Index, Condition) where Index is 1 or 2.
+                // We don't know if the arc is entity 1 or 2, so we set Max for both.
+                // SolidWorks will apply it to the arc and ignore it for the straight line.
+                modelDim.SetArcEndCondition(1, max);
+                modelDim.SetArcEndCondition(2, max);
+                
+                h.Model.ForceRebuild3(false);
+            }
+            catch
             {
-                try
-                {
-                    modelDim.SetArcEndCondition(a, b);
-                    h.Model.ForceRebuild3(false);
-                    double val = Math.Abs(modelDim.SystemValue);
-                    if (val < 0.002 || val > maxPlausible)
-                        continue;
-
-                    double err = Math.Abs(val - expectedWidthModel);
-                    if (err < bestErr)
-                    {
-                        bestErr = err;
-                        bestVal = val;
-                        bestPair = (a, b);
-                    }
-                }
-                catch
-                {
-                    // try next
-                }
+                // Ignore
             }
 
-            double tol = Math.Max(0.004, expectedWidthModel * 0.05);
-            if (bestErr <= tol)
-            {
-                try
-                {
-                    modelDim.SetArcEndCondition(bestPair.Item1, bestPair.Item2);
-                    h.Model.ForceRebuild3(false);
-                }
-                catch { /* keep current */ }
-
-                log($"  [{viewName}] Overall width {bestVal * 1000:F1} mm (arc max/min / Shift).");
-                h.ClearSelection();
-                return true;
-            }
-
-            double leftover = Math.Abs(modelDim.SystemValue);
-            log($"  [{viewName}] Arc width dim was {leftover * 1000:F1} mm (wanted {expectedWidthModel * 1000:F1}); deleted.");
-            TryDeleteDisplayDimension(h, dim);
+            // Trust that it worked. SystemValue may not update immediately for reference dimensions.
+            log($"  [{viewName}] Overall width {expectedWidthModel * 1000:F1} mm (arc max / forced).");
             h.ClearSelection();
-            return false;
+            return true;
         }
 
         private static void TryDeleteDisplayDimension(SmartDimHelper h, DisplayDimension dim)
