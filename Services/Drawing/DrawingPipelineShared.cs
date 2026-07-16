@@ -13,17 +13,21 @@ namespace SolidWorksTester.Services.Drawing
             log("Removing existing views...");
             IModelDocExtension modelDocExt = model.Extension;
 
-            IView? firstViewNode = drawing.GetFirstView() as IView;
-            IView? viewNodeToDelete = firstViewNode?.GetNextView() as IView;
-
-            while (viewNodeToDelete != null)
+            // Collect names first — live COM iteration while deleting can hang or invalidate pointers.
+            var viewNames = new List<string>();
+            IView? view = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
+            while (view != null)
             {
-                string viewName = viewNodeToDelete.GetName2();
+                viewNames.Add(view.GetName2());
+                view = view.GetNextView() as IView;
+            }
+
+            foreach (string viewName in viewNames)
+            {
                 log($"  Deleting view: {viewName}");
                 model.ClearSelection2(true);
-                modelDocExt.SelectByID2(viewName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
-                model.EditDelete();
-                viewNodeToDelete = firstViewNode?.GetNextView() as IView;
+                if (modelDocExt.SelectByID2(viewName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+                    model.EditDelete();
             }
 
             model.ForceRebuild3(true);
@@ -46,25 +50,31 @@ namespace SolidWorksTester.Services.Drawing
                 throw new InvalidOperationException("Failed to create front view.");
 
             frontView.SetName2("Drawing View1");
+            string frontName = frontView.GetName2();
+            frontView.UseSheetScale = 1;
             log($"  Front view created at ({layout.FrontX:F3}, {layout.FrontY:F3}).");
 
             model.ClearSelection2(true);
-            modelDocExt.SelectByID2("Drawing View1", "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
+            if (!modelDocExt.SelectByID2(frontName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+                throw new InvalidOperationException($"Failed to select front view '{frontName}'.");
             IView? topView = drawing.CreateUnfoldedViewAt3(
                 layout.TopX, layout.TopY, 0.0, false);
             if (topView != null)
             {
                 topView.SetName2("Drawing View2");
+                topView.UseSheetScale = 1;
                 log("  Top view created.");
             }
 
             model.ClearSelection2(true);
-            modelDocExt.SelectByID2("Drawing View1", "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
+            if (!modelDocExt.SelectByID2(frontName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+                throw new InvalidOperationException($"Failed to select front view '{frontName}'.");
             IView? rightView = drawing.CreateUnfoldedViewAt3(
                 layout.RightX, layout.RightY, 0.0, false);
             if (rightView != null)
             {
                 rightView.SetName2("Drawing View3");
+                rightView.UseSheetScale = 1;
                 log("  Right view created.");
             }
 
@@ -112,6 +122,7 @@ namespace SolidWorksTester.Services.Drawing
             }
 
             isoView.SetName2(SmartDim.SmartDimConstants.IsometricViewName);
+            isoView.UseSheetScale = 1;
             log($"  Isometric view created (seed {x:F3}, {y:F3}; final pack later).");
             model.ForceRebuild3(true);
         }

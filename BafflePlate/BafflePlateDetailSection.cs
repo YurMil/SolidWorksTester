@@ -93,6 +93,7 @@ namespace SolidWorksTester.BafflePlate
             if (circle == null)
             {
                 log("  Detail A: CreateCircleByRadius failed.");
+                ExitSketchIfNeeded(model);
                 return null;
             }
 
@@ -104,6 +105,7 @@ namespace SolidWorksTester.BafflePlate
             if (!circle.Select4(false, null))
             {
                 log("  Detail A: SketchSegment.Select4 failed — CreateDetailViewAt4 skipped.");
+                ExitSketchIfNeeded(model);
                 return null;
             }
 
@@ -122,7 +124,7 @@ namespace SolidWorksTester.BafflePlate
                     true,
                     false,
                     false,
-                    5);
+                    0); // swDetViewFontSource_Document (enum missing in this interop)
 
                 detail = created as IView;
             }
@@ -130,10 +132,12 @@ namespace SolidWorksTester.BafflePlate
             {
                 log($"  Detail A: CreateDetailViewAt4 threw ({ex.Message}).");
                 model.ClearSelection2(true);
+                ExitSketchIfNeeded(model);
                 return null;
             }
 
             model.ClearSelection2(true);
+            ExitSketchIfNeeded(model);
 
             if (detail == null)
             {
@@ -196,6 +200,7 @@ namespace SolidWorksTester.BafflePlate
             if (line == null)
             {
                 log("  Section B-B: CreateLine failed.");
+                ExitSketchIfNeeded(model);
                 return null;
             }
 
@@ -205,6 +210,7 @@ namespace SolidWorksTester.BafflePlate
             if (line is not ISketchSegment lineSeg || !lineSeg.Select4(false, null))
             {
                 log("  Section B-B: SketchSegment.Select4 failed — CreateSectionViewAt5 skipped.");
+                ExitSketchIfNeeded(model);
                 return null;
             }
 
@@ -224,10 +230,12 @@ namespace SolidWorksTester.BafflePlate
             {
                 log($"  Section B-B: CreateSectionViewAt5 threw ({ex.Message}).");
                 model.ClearSelection2(true);
+                ExitSketchIfNeeded(model);
                 return null;
             }
 
             model.ClearSelection2(true);
+            ExitSketchIfNeeded(model);
 
             if (section == null)
             {
@@ -382,6 +390,20 @@ namespace SolidWorksTester.BafflePlate
             catch (Exception ex)
             {
                 log($"  Section B-B: Ra symbol failed ({ex.Message}).");
+            }
+        }
+
+        private static void ExitSketchIfNeeded(IModelDoc2 model)
+        {
+            try
+            {
+                // Leaving Edit Sketch open blocks subsequent drawing COM calls.
+                if (model.GetActiveSketch() != null)
+                    model.SketchManager.InsertSketch(true);
+            }
+            catch
+            {
+                // Best-effort — view creation may already have closed the sketch.
             }
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorksTester.Services.Drawing;
@@ -42,7 +43,7 @@ namespace SolidWorksTester.LoftedBends
 
             drawing.GenerateViewPaletteViews(partPath);
 
-            string? paletteName = FindFlatPatternPaletteName(drawing, log);
+            string? paletteName = WaitForFlatPatternPaletteName(drawing, log);
             IView? flat = null;
 
             if (!string.IsNullOrEmpty(paletteName))
@@ -86,18 +87,21 @@ namespace SolidWorksTester.LoftedBends
             }
 
             flat.SetName2(FlatPatternViewName);
-            string configUsed = activeConfigName + "SM-FLAT-PATTERN";
+            string flatName = flat.GetName2();
+            // SolidWorks names flat-pattern configs as {Parent}_SM-FLAT-PATTERN
+            string configUsed = activeConfigName + "_SM-FLAT-PATTERN";
             flat.ReferencedConfiguration = configUsed;
+            flat.UseSheetScale = 1;
 
             model.ClearSelection2(true);
-            model.Extension.SelectByID2(FlatPatternViewName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
+            model.Extension.SelectByID2(flatName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
             bool configChanged = drawing.ChangeRefConfigurationOfFlatPatternView(partPath, configUsed);
             log($"  Flat pattern config {configUsed}: {configChanged}");
 
             EnsureInnerFaceUp(flat, log);
             EnsureFlatPatternUnsuppressed(flat, configUsed, log);
             model.ForceRebuild3(true);
-            log($"  Flat pattern created as {FlatPatternViewName} (inner-up).");
+            log($"  Flat pattern created as {flatName} (inner-up).");
         }
 
         private static void EnsureInnerFaceUp(IView flat, Action<string> log)
@@ -121,28 +125,37 @@ namespace SolidWorksTester.LoftedBends
             }
         }
 
-        private static string? FindFlatPatternPaletteName(IDrawingDoc drawing, Action<string> log)
+        private static string? WaitForFlatPatternPaletteName(IDrawingDoc drawing, Action<string> log)
         {
-            try
-            {
-                string[]? names = drawing.GetDrawingPaletteViewNames() as string[];
-                if (names == null)
-                    return null;
+            const int attempts = 20;
+            const int waitMs = 150;
 
-                foreach (string name in names)
+            for (int attempt = 1; attempt <= attempts; attempt++)
+            {
+                try
                 {
-                    string lower = name.ToLowerInvariant();
-                    if (lower.Contains("flat pattern") ||
-                        lower.Contains("развертка") ||
-                        lower.Contains("развёртка"))
-                        return name;
+                    string[]? names = drawing.GetDrawingPaletteViewNames() as string[];
+                    if (names != null && names.Length > 0)
+                    {
+                        foreach (string name in names)
+                        {
+                            string lower = name.ToLowerInvariant();
+                            if (lower.Contains("flat pattern") ||
+                                lower.Contains("развертка") ||
+                                lower.Contains("развёртка"))
+                                return name;
+                        }
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                log($"  View Palette warning: {ex.Message}");
+                catch (Exception ex)
+                {
+                    log($"  View Palette wait ({attempt}/{attempts}): {ex.Message}");
+                }
+
+                Thread.Sleep(waitMs);
             }
 
+            log("  View Palette still empty after wait — using fallback.");
             return null;
         }
 
@@ -159,7 +172,10 @@ namespace SolidWorksTester.LoftedBends
 
                 string savedConfig = partDoc.ConfigurationManager.ActiveConfiguration.Name;
                 if (!partDoc.ShowConfiguration2(configUsed))
+                {
+                    log($"  Warning: could not activate flat-pattern config '{configUsed}'.");
                     return;
+                }
 
                 FeatureManager featMgr = partDoc.FeatureManager;
                 FlatPatternFolder? flatFolder = featMgr.GetFlatPatternFolder() as FlatPatternFolder;
@@ -191,6 +207,7 @@ namespace SolidWorksTester.LoftedBends
                     }
                 }
 
+                partDoc.ForceRebuild3(true);
                 partDoc.ShowConfiguration2(savedConfig);
                 int saveErrors = 0;
                 int saveWarnings = 0;

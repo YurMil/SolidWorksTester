@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorksTester.Services.Analysis;
@@ -12,6 +13,9 @@ namespace SolidWorksTester.Services.Drawing
     /// </summary>
     internal static class BentSheetMetalDrawingPipeline
     {
+        private const int PaletteWaitAttempts = 20;
+        private const int PaletteWaitMs = 150;
+
         public static void Process(
             ISldWorks swApp,
             IModelDoc2 drawingModel,
@@ -61,6 +65,12 @@ namespace SolidWorksTester.Services.Drawing
             IView? frontView = FindViewByName(drawing, "Drawing View1");
             if (frontView == null)
             {
+                // Rename may have failed — fall back to the first model view.
+                frontView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
+            }
+
+            if (frontView == null)
+            {
                 log("  Warning: front view not found — skipping flat pattern.");
                 return;
             }
@@ -71,15 +81,7 @@ namespace SolidWorksTester.Services.Drawing
 
             drawing.GenerateViewPaletteViews(partPath);
 
-            string[]? paletteViewNames = null;
-            try
-            {
-                paletteViewNames = (string[])drawing.GetDrawingPaletteViewNames();
-            }
-            catch (Exception ex)
-            {
-                log($"  View Palette warning: {ex.Message}");
-            }
+            string[]? paletteViewNames = WaitForPaletteViewNames(drawing, log);
 
             string? flatPatternPaletteName = null;
             if (paletteViewNames != null)
@@ -96,7 +98,8 @@ namespace SolidWorksTester.Services.Drawing
             }
 
             IView? flatPatternView = null;
-            string configUsed = activeConfigName + "SM-FLAT-PATTERN";
+            // SolidWorks names flat-pattern configs as {Parent}_SM-FLAT-PATTERN
+            string configUsed = activeConfigName + "_SM-FLAT-PATTERN";
 
             if (!string.IsNullOrEmpty(flatPatternPaletteName))
             {
@@ -142,15 +145,39 @@ namespace SolidWorksTester.Services.Drawing
             }
 
             flatPatternView.SetName2("Drawing View4");
+            string flatName = flatPatternView.GetName2();
             flatPatternView.ReferencedConfiguration = configUsed;
+            flatPatternView.UseSheetScale = 1;
 
             model.ClearSelection2(true);
-            modelDocExt.SelectByID2("Drawing View4", "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
+            modelDocExt.SelectByID2(flatName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0);
             bool configChanged = drawing.ChangeRefConfigurationOfFlatPatternView(partPath, configUsed);
             log($"  Flat pattern created. Configuration {configUsed}: {configChanged}");
 
             EnsureFlatPatternUnsuppressed(flatPatternView, configUsed, log);
             model.ForceRebuild3(true);
+        }
+
+        private static string[]? WaitForPaletteViewNames(IDrawingDoc drawing, Action<string> log)
+        {
+            for (int attempt = 1; attempt <= PaletteWaitAttempts; attempt++)
+            {
+                try
+                {
+                    string[]? names = drawing.GetDrawingPaletteViewNames() as string[];
+                    if (names != null && names.Length > 0)
+                        return names;
+                }
+                catch (Exception ex)
+                {
+                    log($"  View Palette wait ({attempt}/{PaletteWaitAttempts}): {ex.Message}");
+                }
+
+                Thread.Sleep(PaletteWaitMs);
+            }
+
+            log("  View Palette still empty after wait — using fallback.");
+            return null;
         }
 
         private static IView? FindViewByName(IDrawingDoc drawing, string viewName)
@@ -177,7 +204,10 @@ namespace SolidWorksTester.Services.Drawing
 
                 string savedConfig = partDoc.ConfigurationManager.ActiveConfiguration.Name;
                 if (!partDoc.ShowConfiguration2(configUsed))
+                {
+                    log($"  Warning: could not activate flat-pattern config '{configUsed}'.");
                     return;
+                }
 
                 FeatureManager featMgr = partDoc.FeatureManager;
                 FlatPatternFolder? flatFolder = featMgr.GetFlatPatternFolder() as FlatPatternFolder;
@@ -209,6 +239,7 @@ namespace SolidWorksTester.Services.Drawing
                     }
                 }
 
+                partDoc.ForceRebuild3(true);
                 partDoc.ShowConfiguration2(savedConfig);
 
                 int saveErrors = 0;

@@ -54,6 +54,8 @@ namespace SolidWorksTester.Services
                 {
                     partTimer.Measure("close drawing", () =>
                         SolidWorksConnection.SafeCloseDocument(swApp, model, log));
+                    // Part stays open through view creation; close after the drawing is finished.
+                    SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log);
                 }
 
                 return;
@@ -105,6 +107,8 @@ namespace SolidWorksTester.Services
             finally
             {
                 SolidWorksConnection.SafeCloseDocumentByPath(swApp, drawingPath, log);
+                // Part stays open through view creation; close after the drawing is finished.
+                SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log);
             }
         }
 

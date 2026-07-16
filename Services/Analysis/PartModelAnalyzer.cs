@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using SolidWorksTester.Services;
 
 namespace SolidWorksTester.Services.Analysis
 {
@@ -305,9 +306,11 @@ namespace SolidWorksTester.Services.Analysis
                     merged.DrawingProfile = propertyClassification.DrawingProfile ?? "baffle_plate";
                 return merged;
             }
-            finally
+            catch
             {
-                swApp.CloseDoc(partPath);
+                // Keep the part open for drawing creation; only close if analysis itself failed.
+                SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log);
+                throw;
             }
         }
 

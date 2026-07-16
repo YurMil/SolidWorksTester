@@ -59,6 +59,8 @@ namespace SolidWorksTester.Services.Drawing
 
             log("  Sheet layout: outline gaps + stable anchors...");
 
+            BindViewsToSheetScale(drawing);
+
             for (int step = 0; step <= MaxScaleSteps; step++)
             {
                 List<ViewBox> views = CollectViews(drawing);
@@ -524,6 +526,16 @@ namespace SolidWorksTester.Services.Drawing
                 needW += GapMeters + iso.W * 0.5;
 
             return needW > (sheetW - 2 * MarginMeters) || needH > (sheetH - 2 * MarginMeters);
+        }
+
+        private static void BindViewsToSheetScale(IDrawingDoc drawing)
+        {
+            IView? view = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
+            while (view != null)
+            {
+                view.UseSheetScale = 1;
+                view = view.GetNextView() as IView;
+            }
         }
 
         private static bool TryStepScaleDown(
