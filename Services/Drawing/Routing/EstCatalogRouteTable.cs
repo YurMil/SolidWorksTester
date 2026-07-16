@@ -28,16 +28,21 @@ namespace SolidWorksTester.Services.Drawing.Routing
                 ["angle"] = new(DrawingPipelineId.ImportedGeometry, null, false),
                 ["square_bar"] = new(DrawingPipelineId.ImportedGeometry, null, false),
 
-                // Vessel families — cylindrical views, specialized dims later
-                ["shell"] = new(DrawingPipelineId.Cylindrical, null, false),
+                // Vessel lofted-bend shells — flat pattern + OD/height
+                ["shell"] = new(DrawingPipelineId.LoftedBends, null, true),
+                ["insulation_shell"] = new(DrawingPipelineId.LoftedBends, null, true),
+                ["shell_with_cutting"] = new(DrawingPipelineId.LoftedBends, null, true),
+
                 ["cone"] = new(DrawingPipelineId.Cylindrical, null, false),
                 ["bellow"] = new(DrawingPipelineId.Cylindrical, null, false),
                 ["dished_end"] = new(DrawingPipelineId.Cylindrical, null, false),
                 ["dished_end_din28011"] = new(DrawingPipelineId.Cylindrical, null, false),
                 ["dished_end_din28013"] = new(DrawingPipelineId.Cylindrical, null, false),
                 ["dished_end_ss895"] = new(DrawingPipelineId.Cylindrical, null, false),
-                ["insulation_shell"] = new(DrawingPipelineId.Cylindrical, null, false),
-                ["shell_with_cutting"] = new(DrawingPipelineId.Cylindrical, null, false),
+
+                // Baffle / tube-sheet — dedicated nested flat-plate pipeline
+                ["baffle_plate"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.BafflePlate, true),
+                ["baffle_plate_fuzzy"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.BafflePlate, true),
 
                 // Flat families without dedicated dim modules yet
                 ["lifting_lug"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.Generic, false),

@@ -10,8 +10,8 @@
 | --- | --- |
 | Drawing views | `Drawing View1` … `Drawing View4` (SOLIDWORKS default pattern) |
 | Pipelines | `{Kind}DrawingPipeline` static class |
-| SmartDim modules | `SmartDim{Feature}` at project root |
-| Special modules | Subfolder per domain (`RoundFlatPlate/`, `Cylindrical/`) |
+| SmartDim modules | `SmartDim/Modules/SmartDim{Feature}.cs` |
+| Special modules | Subfolder per domain (`RoundFlatPlate/`, `Cylindrical/`, `BafflePlate/`, …) |
 | UI controls | `Themed{ControlName}` |
 
 ---

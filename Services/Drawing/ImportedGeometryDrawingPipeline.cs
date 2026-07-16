@@ -2,7 +2,7 @@ using System;
 using SolidWorks.Interop.sldworks;
 using SolidWorksTester.Imported;
 using SolidWorksTester.Services.Analysis;
-using SolidWorksTester.Services.Drawing;
+using SolidWorksTester.Services.Drawing.Routing;
 using SolidWorksTester.SmartDim;
 
 namespace SolidWorksTester.Services.Drawing
@@ -18,23 +18,36 @@ namespace SolidWorksTester.Services.Drawing
             IModelDoc2 drawingModel,
             string partPath,
             PartAnalysisResult analysis,
+            DrawingRouteDecision route,
             Action<string> log)
         {
             var drawing = (IDrawingDoc)drawingModel;
+            using var timer = new PipelineStopwatch(log, $"pipeline {route.PipelineLabel}");
 
-            log($"Using imported-geometry pipeline (shape: {analysis.ImportedShape}).");
+            log($"Using imported-geometry pipeline (shape: {analysis.ImportedShape}). [{route.PipelineLabel}]");
 
-            DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log);
-            DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log);
-            DrawingPipelineShared.CreateIsometricView(drawingModel, drawing, partPath, log);
-            DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log);
-            ApplyDimensions(swApp, drawingModel, drawing, analysis, log);
-            log("Checking for duplicate dimensions...");
-            DrawingDimensionDeduper.RemoveDuplicateDimensions(
-                drawingModel, drawing, log, SmartDimConstants.IsometricViewName);
-            DrawingPipelineShared.AutoArrangeDimensions(drawingModel, drawing);
-            DrawingPipelineShared.AdjustSheetScaleIfNeeded(drawingModel, drawing, log);
-            drawingModel.ForceRebuild3(true);
+            timer.Measure("delete existing views", () =>
+                DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log));
+            timer.Measure("create standard views", () =>
+                DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log));
+            timer.Measure("create isometric view", () =>
+                DrawingPipelineShared.CreateIsometricView(drawingModel, drawing, partPath, log));
+            timer.Measure("apply HLV display mode", () =>
+                DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log));
+            timer.Measure("apply dimensions", () =>
+                ApplyDimensions(swApp, drawingModel, drawing, analysis, log));
+            timer.Measure("dedupe dimensions", () =>
+            {
+                log("Checking for duplicate dimensions...");
+                DrawingDimensionDeduper.RemoveDuplicateDimensions(
+                    drawingModel, drawing, log, SmartDimConstants.IsometricViewName);
+            });
+            timer.Measure("auto-arrange dimensions", () =>
+                DrawingPipelineShared.AutoArrangeDimensions(drawingModel, drawing));
+            timer.Measure("sheet layout normalize", () =>
+                SheetLayoutNormalizer.Arrange(drawingModel, drawing, log));
+            timer.Measure("force rebuild", () =>
+                drawingModel.ForceRebuild3(true));
         }
 
         private static void ApplyDimensions(

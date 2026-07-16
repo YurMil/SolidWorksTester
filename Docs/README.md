@@ -88,12 +88,12 @@ This folder is the **engineering documentation hub** for the codebase. It is sep
 
 | Path | Purpose |
 | --- | --- |
-| `Services/` | COM orchestration, analysis, drawing pipelines |
-| `SmartDim/` | Shared dimensioning facade and constants |
-| `Cylindrical/` | Cylindrical-only annotation modules |
-| `RoundFlatPlate/` | Round disc specialisation for flat-plate pipeline |
+| `Services/` | COM orchestration, analysis, drawing pipelines, routing |
+| `SmartDim/` | Shared dimensioning facade; modules in `SmartDim/Modules/` |
+| `Cylindrical/` / `LoftedBends/` / `BafflePlate/` / … | Domain annotation modules |
 | `UI/` | WinForms shell, theme, release-notes viewer |
 | `Docs/ReleaseNotes/` | User-facing Markdown per version |
+| `SolidWorksTester.Tests/` | Pure unit tests (registry, router, clone) |
 | `publish.bat` | Standalone EXE publish script |
 
 ---

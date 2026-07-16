@@ -11,53 +11,131 @@ namespace SolidWorksTester.Services.Drawing
     /// <summary>
     /// Removes duplicate display dimensions across drawing views.
     /// Keeps the first occurrence (Drawing View1 first, then View2, View3, ...).
+    /// Returns a snapshot of kept dimensions (for EST validate without a second COM walk).
     /// </summary>
     internal static class DrawingDimensionDeduper
     {
         private const double ValueTolerance = 0.00005;
 
-        public static void RemoveDuplicateDimensions(
+        private const double SubMmNoiseMeters = 0.001; // 1 mm
+
+        /// <summary>
+        /// Dedupes all model views except those in <paramref name="skipViewNames"/>.
+        /// Returns samples for every kept dimension (value already read during key build).
+        /// </summary>
+        public static IReadOnlyList<DrawingDimensionSample> RemoveDuplicateDimensions(
             IModelDoc2 model,
             IDrawingDoc drawing,
             Action<string> log,
+            params string[] skipViewNames) =>
+            RemoveDuplicateDimensions(model, drawing, log, sheetMetalThicknessMeters: null, skipViewNames);
+
+        public static IReadOnlyList<DrawingDimensionSample> RemoveDuplicateDimensions(
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            Action<string> log,
+            double? sheetMetalThicknessMeters,
             params string[] skipViewNames)
         {
             var skipViews = new HashSet<string>(skipViewNames, StringComparer.OrdinalIgnoreCase);
+            return RemoveDuplicateDimensionsCore(
+                model,
+                drawing,
+                log,
+                viewName => !skipViews.Contains(viewName),
+                sheetMetalThicknessMeters);
+        }
+
+        /// <summary>
+        /// Dedupes only the named views (e.g. baffle primary after single-view import).
+        /// Empty / untouched views are never opened for annotation walks.
+        /// </summary>
+        public static IReadOnlyList<DrawingDimensionSample> RemoveDuplicateDimensionsOnlyIn(
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            Action<string> log,
+            params string[] onlyViewNames) =>
+            RemoveDuplicateDimensionsOnlyIn(model, drawing, log, sheetMetalThicknessMeters: null, onlyViewNames);
+
+        public static IReadOnlyList<DrawingDimensionSample> RemoveDuplicateDimensionsOnlyIn(
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            Action<string> log,
+            double? sheetMetalThicknessMeters,
+            params string[] onlyViewNames)
+        {
+            var onlyViews = new HashSet<string>(onlyViewNames, StringComparer.OrdinalIgnoreCase);
+            return RemoveDuplicateDimensionsCore(
+                model,
+                drawing,
+                log,
+                viewName => onlyViews.Contains(viewName),
+                sheetMetalThicknessMeters);
+        }
+
+        private static IReadOnlyList<DrawingDimensionSample> RemoveDuplicateDimensionsCore(
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            Action<string> log,
+            Func<string, bool> includeView,
+            double? sheetMetalThicknessMeters)
+        {
             var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var toDelete = new List<IAnnotation>();
-            int kept = 0;
+            var keptSamples = new List<DrawingDimensionSample>();
+            int noiseCount = 0;
+            int duplicateCount = 0;
 
             IView? view = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
             while (view != null)
             {
                 string viewName = view.GetName2();
-                if (!skipViews.Contains(viewName))
-                    CollectDuplicatesInView(view, seenKeys, toDelete, ref kept);
+                if (includeView(viewName))
+                {
+                    CollectDuplicatesInView(
+                        view,
+                        viewName,
+                        seenKeys,
+                        toDelete,
+                        keptSamples,
+                        sheetMetalThicknessMeters,
+                        ref noiseCount,
+                        ref duplicateCount);
+                }
 
                 view = view.GetNextView() as IView;
             }
 
-            if (toDelete.Count == 0)
+            if (toDelete.Count > 0)
             {
-                log($"  Duplicate check: {kept} unique dimensions, no duplicates.");
-                return;
+                model.ClearSelection2(true);
+                foreach (IAnnotation annotation in toDelete)
+                    annotation.Select3(true, null);
+
+                model.Extension.DeleteSelection2((int)swDeleteSelectionOptions_e.swDelete_Absorbed);
+                model.ClearSelection2(true);
             }
 
-            model.ClearSelection2(true);
-            foreach (IAnnotation annotation in toDelete)
-                annotation.Select3(true, null);
+            if (noiseCount > 0)
+                log($"  Removed {noiseCount} noise dimension(s) (Move Face / sub-mm).");
 
-            model.Extension.DeleteSelection2((int)swDeleteSelectionOptions_e.swDelete_Absorbed);
-            model.ClearSelection2(true);
+            if (duplicateCount > 0)
+                log($"  Duplicate check: removed {duplicateCount} duplicate dimension(s), kept {keptSamples.Count} unique.");
+            else
+                log($"  Duplicate check: {keptSamples.Count} unique dimensions, no duplicates.");
 
-            log($"  Duplicate check: removed {toDelete.Count} duplicate dimension(s), kept {kept} unique.");
+            return keptSamples;
         }
 
         private static void CollectDuplicatesInView(
             IView view,
+            string viewName,
             HashSet<string> seenKeys,
             List<IAnnotation> toDelete,
-            ref int kept)
+            List<DrawingDimensionSample> keptSamples,
+            double? sheetMetalThicknessMeters,
+            ref int noiseCount,
+            ref int duplicateCount)
         {
             var seenInView = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -67,24 +145,127 @@ namespace SolidWorksTester.Services.Drawing
                 if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
                 {
                     DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    List<string> keys = BuildDimensionKeys(displayDim, ann);
 
-                    bool duplicate = keys.Any(seenKeys.Contains) || keys.Any(seenInView.Contains);
-                    if (duplicate)
+                    if (IsNoiseDimension(displayDim, sheetMetalThicknessMeters))
+                    {
                         toDelete.Add(ann);
+                        noiseCount++;
+                    }
                     else
                     {
-                        foreach (string key in keys)
-                        {
-                            seenKeys.Add(key);
-                            seenInView.Add(key);
-                        }
+                        List<string> keys = BuildDimensionKeys(displayDim, ann);
 
-                        kept++;
+                        bool duplicate = keys.Any(seenKeys.Contains) || keys.Any(seenInView.Contains);
+                        if (duplicate)
+                        {
+                            toDelete.Add(ann);
+                            duplicateCount++;
+                        }
+                        else
+                        {
+                            foreach (string key in keys)
+                            {
+                                seenKeys.Add(key);
+                                seenInView.Add(key);
+                            }
+
+                            if (TryCreateSample(displayDim, viewName, out DrawingDimensionSample sample))
+                                keptSamples.Add(sample);
+                        }
                     }
                 }
 
                 ann = ann.GetNext3();
+            }
+        }
+
+        /// <summary>
+        /// Drops Move Face tech offsets and sub-mm linears that are not sheet-metal thickness.
+        /// </summary>
+        private static bool IsNoiseDimension(
+            DisplayDimension? displayDim,
+            double? sheetMetalThicknessMeters)
+        {
+            if (displayDim == null)
+                return false;
+
+            try
+            {
+                Dimension? dim = displayDim.GetDimension2(0) as Dimension;
+                if (dim == null)
+                    return false;
+
+                string fullName = dim.FullName ?? string.Empty;
+                if (IsMoveFaceFeatureName(fullName))
+                    return true;
+
+                if (displayDim.Type2 != (int)swDimensionType_e.swLinearDimension)
+                    return false;
+
+                double value = Math.Abs(dim.SystemValue);
+                if (value >= SubMmNoiseMeters)
+                    return false;
+
+                // Keep genuine SM thickness even if < 1 mm.
+                if (sheetMetalThicknessMeters.HasValue)
+                {
+                    double tol = Math.Max(0.00005, sheetMetalThicknessMeters.Value * 0.02);
+                    if (Math.Abs(value - sheetMetalThicknessMeters.Value) <= tol)
+                        return false;
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsMoveFaceFeatureName(string fullName)
+        {
+            // e.g. "D1@Move Face Hole M18@PartConfig"
+            int firstAt = fullName.IndexOf('@');
+            if (firstAt < 0 || firstAt + 1 >= fullName.Length)
+                return false;
+
+            string after = fullName[(firstAt + 1)..];
+            int secondAt = after.IndexOf('@');
+            string feature = secondAt >= 0 ? after[..secondAt] : after;
+            feature = feature.Trim();
+
+            return feature.StartsWith("Move Face", StringComparison.OrdinalIgnoreCase) ||
+                   feature.StartsWith("MoveFace", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryCreateSample(
+            DisplayDimension? displayDim,
+            string viewName,
+            out DrawingDimensionSample sample)
+        {
+            sample = null!;
+            if (displayDim == null)
+                return false;
+
+            try
+            {
+                Dimension? modelDim = displayDim.GetDimension2(0) as Dimension;
+                if (modelDim == null)
+                    return false;
+
+                double valueMeters = Math.Abs(modelDim.SystemValue);
+                sample = new DrawingDimensionSample
+                {
+                    Type = displayDim.Type2,
+                    ValueMm = Math.Round(valueMeters * 1000.0, 3),
+                    Prefix = displayDim.GetText((int)swDimensionTextParts_e.swDimensionTextPrefix) ?? string.Empty,
+                    ViewName = viewName
+                };
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -134,7 +315,10 @@ namespace SolidWorksTester.Services.Drawing
             }
 
             if (toDelete.Count == 0)
+            {
+                log("  Quantity/bare Ø conflict: none.");
                 return;
+            }
 
             model.ClearSelection2(true);
             foreach (IAnnotation annotation in toDelete)

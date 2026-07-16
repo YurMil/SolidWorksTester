@@ -13,6 +13,8 @@ namespace SolidWorksTester.Services.Analysis
         public bool IsHollow { get; init; }
         public bool HasHoles { get; init; }
         public bool HasChamfers { get; init; }
+        /// <summary>Sheet-metal Lofted Bends feature present — dedicated unfold pipeline.</summary>
+        public bool HasLoftedBendFeature { get; init; }
         public int CylindricalFaceCount { get; init; }
         /// <summary>Flat disc-like sheet (two similar large dims, one thin).</summary>
         public bool IsRoundFlatProfile { get; init; }
@@ -53,43 +55,68 @@ namespace SolidWorksTester.Services.Analysis
         public int SolidBodyCount { get; init; }
         /// <summary>True only for genuine tube/rod imports — enables cylindrical dim modules.</summary>
         public bool IsTrueCylindricalTube { get; init; }
+
+        /// <summary>
+        /// Cylinder face samples collected by the analysis scan (radius + axis origin).
+        /// Lets drawing-stage pattern math (baffle pitch/angle/seed) run without another face walk.
+        /// May be a partial sample when the scan early-exited, but always covers ≥ the dominant
+        /// hole group needed for dense-pattern classification.
+        /// </summary>
+        public IReadOnlyList<CylinderFaceSample> CylinderSamples { get; set; } =
+            Array.Empty<CylinderFaceSample>();
+
+        /// <summary>Shallow copy for classification merge without mutating the geometry snapshot.</summary>
+        public PartAnalysisResult Clone() => new()
+        {
+            Kind = Kind,
+            BendFeatureCount = BendFeatureCount,
+            HasSheetMetalFeature = HasSheetMetalFeature,
+            IsHollow = IsHollow,
+            HasHoles = HasHoles,
+            HasChamfers = HasChamfers,
+            HasLoftedBendFeature = HasLoftedBendFeature,
+            CylindricalFaceCount = CylindricalFaceCount,
+            IsRoundFlatProfile = IsRoundFlatProfile,
+            IsRoundedEndFlatProfile = IsRoundedEndFlatProfile,
+            CanImportSketchDimensions = CanImportSketchDimensions,
+            ModelSketchDimensionCount = ModelSketchDimensionCount,
+            FlatPlateSubKind = FlatPlateSubKind,
+            GeometryFlatPlateSubKind = GeometryFlatPlateSubKind,
+            ActiveConfiguration = ActiveConfiguration,
+            KindSource = KindSource,
+            FlatPlateSubKindSource = FlatPlateSubKindSource,
+            ClassificationSource = ClassificationSource,
+            PropertyClassificationTrusted = PropertyClassificationTrusted,
+            PropertyTrustFailureReason = PropertyTrustFailureReason,
+            DeclaredPartKind = DeclaredPartKind,
+            DeclaredFlatPlateSubKind = DeclaredFlatPlateSubKind,
+            DrawingProfile = DrawingProfile,
+            EstProperties = EstProperties,
+            PropertyOrigin = PropertyOrigin,
+            EstNameCatalogId = EstNameCatalogId,
+            EstNameHasDedicatedPipeline = EstNameHasDedicatedPipeline,
+            IsImportedGeometry = IsImportedGeometry,
+            ImportedShape = ImportedShape,
+            ImportFeatureCount = ImportFeatureCount,
+            ImportFeatureName = ImportFeatureName,
+            BboxLongMeters = BboxLongMeters,
+            BboxMidMeters = BboxMidMeters,
+            BboxShortMeters = BboxShortMeters,
+            SolidBodyCount = SolidBodyCount,
+            IsTrueCylindricalTube = IsTrueCylindricalTube,
+            CylinderSamples = CylinderSamples
+        };
     }
 
     public static class PartModelAnalyzer
     {
-        private static readonly HashSet<string> BendFeatureTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "EdgeFlange", "Hem", "Jog", "SketchBend", "SM3dBend",
-            "SMMiteredFlange", "MiterFlange", "LoftedBend", "OneBend", "Fold"
-        };
-
-        private static readonly HashSet<string> SheetMetalRootTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "SheetMetal", "BaseFlange", "FlatPattern"
-        };
-
-        private static readonly HashSet<string> CylindricalFeatureTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Revolve", "RevolveBoss", "RevolveCut", "RevolveThin",
-            "Sweep", "SweepBoss", "SweepCut", "SweepThin",
-            "ThinRevolve", "ThinSweep", "Loft", "LoftBoss", "LoftCut"
-        };
-
-        private static readonly HashSet<string> HoleFeatureTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "HoleWiz", "AdvHoleWiz", "HoleSeries", "SimpleHole", "HoleSeriesWizard"
-        };
-
-        private static readonly HashSet<string> ChamferFeatureTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Chamfer", "Fillet"
-        };
-
         public static PartAnalysisResult Analyze(ISldWorks swApp, string partPath, Action<string> log)
         {
+            using var timer = new Services.Drawing.PipelineStopwatch(log, "part analysis");
             int errors = 0;
             int warnings = 0;
 
+            timer.Step("OpenDoc6");
             IModelDoc2? partDoc = swApp.OpenDoc6(
                 partPath,
                 (int)swDocumentTypes_e.swDocPART,
@@ -97,72 +124,44 @@ namespace SolidWorksTester.Services.Analysis
                 "",
                 ref errors,
                 ref warnings) as IModelDoc2;
+            timer.FinishStep();
 
             if (partDoc == null)
                 throw new InvalidOperationException($"Failed to open part for analysis. Error code: {errors}.");
 
             try
             {
-                bool hasSheetMetal = false;
-                int bendCount = 0;
-                var bendNames = new List<string>();
-                bool hasCylindricalFeature = false;
-                bool hasHoles = false;
-                bool hasChamfers = false;
+                PartGeometrySnapshot snap = timer.Measure("geometry scan", () =>
+                    PartGeometryScanner.Scan(partDoc));
 
-                Feature? feat = partDoc.FirstFeature() as Feature;
-                while (feat != null)
-                {
-                    string typeName = feat.GetTypeName2();
-                    if (SheetMetalRootTypes.Contains(typeName))
-                        hasSheetMetal = true;
-
-                    if (BendFeatureTypes.Contains(typeName))
-                    {
-                        bendCount++;
-                        bendNames.Add(feat.Name);
-                    }
-
-                    if (CylindricalFeatureTypes.Contains(typeName))
-                        hasCylindricalFeature = true;
-
-                    if (HoleFeatureTypes.Contains(typeName))
-                        hasHoles = true;
-
-                    if (ChamferFeatureTypes.Contains(typeName))
-                        hasChamfers = true;
-
-                    feat = feat.GetNextFeature() as Feature;
-                }
-
-                int cylindricalFaces = 0;
-                int planarFaces = 0;
-                bool isHollow = false;
-                AnalyzeSolidBodies(partDoc, ref cylindricalFaces, ref planarFaces, ref isHollow, ref hasHoles);
-
-                var importInfo = ImportedGeometryDetector.Analyze(partDoc);
-                int solidBodyCount = CountSolidBodies(partDoc);
+                bool hasHoles = snap.HasHoles;
+                bool isHollow = snap.IsHollow;
                 bool isCylindricalGeometry = IsCylindricalGeometry(
-                    hasCylindricalFeature, cylindricalFaces, planarFaces);
+                    snap.HasCylindricalFeature, snap.CylindricalFaces, snap.PlanarFaces);
 
-                var bodyAnalysis = BuildBodyAnalysis(
-                    partDoc, solidBodyCount, cylindricalFaces, planarFaces,
-                    isHollow, hasHoles, isCylindricalGeometry, importInfo.ImportFeatureCount);
-
+                ImportedGeometryDetector.ImportDetectionResult importInfo = snap.ImportDetection;
                 string configName = partDoc.ConfigurationManager.ActiveConfiguration.Name;
 
                 PartModelKind kind;
                 ImportedGeometryShapeKind importedShape = ImportedGeometryShapeKind.Unknown;
                 bool isTrueCylindricalTube = false;
-                double bboxS = 0, bboxM = 0, bboxL = 0;
+                double bboxS = snap.BboxSortedDims.Length >= 3 ? snap.BboxSortedDims[0] : 0;
+                double bboxM = snap.BboxSortedDims.Length >= 3 ? snap.BboxSortedDims[1] : 0;
+                double bboxL = snap.BboxSortedDims.Length >= 3 ? snap.BboxSortedDims[2] : 0;
 
-                if (hasSheetMetal)
+                if (snap.HasSheetMetal)
                 {
-                    kind = bendCount > 0 ? PartModelKind.BentSheetMetal : PartModelKind.FlatPlate;
+                    // Lofted-bend shells need unfold + OD/height — not generic bent flanges.
+                    if (snap.HasLoftedBendFeature)
+                        kind = PartModelKind.LoftedBends;
+                    else
+                        kind = snap.BendCount > 0 ? PartModelKind.BentSheetMetal : PartModelKind.FlatPlate;
                 }
                 else if (importInfo.IsImported)
                 {
                     kind = PartModelKind.ImportedGeometry;
+                    SolidBodyAnalysisResult bodyAnalysis = BuildBodyAnalysisFromSnapshot(
+                        snap, isHollow, hasHoles, isCylindricalGeometry, importInfo.ImportFeatureCount);
                     var shapeInfo = ImportedGeometryShapeRecognizer.Recognize(partDoc, bodyAnalysis);
                     importedShape = shapeInfo.Shape;
                     isTrueCylindricalTube = shapeInfo.IsTrueCylindricalTube;
@@ -180,34 +179,53 @@ namespace SolidWorksTester.Services.Analysis
                 }
 
                 bool isRoundFlatProfile = kind == PartModelKind.FlatPlate &&
-                    IsRoundFlatDisc(partDoc);
+                    snap.IsRoundFlatDisc(minThickness: 0.0005, minFlatRatio: 5.0, roundTolerance: 0.06);
+
                 bool isRoundedEndFlatProfile = kind == PartModelKind.FlatPlate &&
                     !isRoundFlatProfile &&
-                    IsRoundedEndFlatPlate(partDoc);
-                int modelSketchDimCount = kind == PartModelKind.FlatPlate
-                    ? FlatPlateSketchAnalyzer.CountPartDisplayDimensions(partDoc)
-                    : 0;
-                bool canImportSketchDimensions = FlatPlateSketchAnalyzer.CanImportSketchDimensions(
-                    partDoc, hasSheetMetal, bendCount, modelSketchDimCount);
-                FlatPlateSubKind flatPlateSubKind = kind == PartModelKind.FlatPlate
-                    ? FlatPlateClassifier.Classify(
-                        partDoc, isRoundFlatProfile, isRoundedEndFlatProfile, hasHoles)
-                    : FlatPlateSubKind.Unknown;
+                    IsRoundedEndFlatPlate(snap);
 
-                LogPartType(kind, hasSheetMetal, bendCount, bendNames, isHollow, hasHoles, hasChamfers,
+                int modelSketchDimCount = 0;
+                bool canImportSketchDimensions = false;
+                FlatPlateSubKind flatPlateSubKind = FlatPlateSubKind.Unknown;
+
+                timer.Measure("classify + sketch dims", () =>
+                {
+                    if (kind == PartModelKind.FlatPlate &&
+                        FlatPlateSketchAnalyzer.IsEligibleForSketchImport(
+                            snap.HasSheetMetal,
+                            snap.BendCount,
+                            snap.HasDisqualifyingSketchImportFeatures))
+                    {
+                        modelSketchDimCount = FlatPlateSketchAnalyzer.CountPartDisplayDimensions(partDoc);
+                        canImportSketchDimensions = modelSketchDimCount >= 2;
+                    }
+
+                    flatPlateSubKind = kind == PartModelKind.FlatPlate
+                        ? FlatPlateClassifier.Classify(snap, isRoundFlatProfile, isRoundedEndFlatProfile)
+                        : FlatPlateSubKind.Unknown;
+
+                    // Early-exit scan can set large-outer cylinder → rounded-end flag; baffle wins.
+                    if (flatPlateSubKind == FlatPlateSubKind.BafflePlate)
+                        isRoundedEndFlatProfile = false;
+                });
+
+                LogPartType(kind, snap.HasSheetMetal, snap.BendCount, snap.BendNames,
+                    isHollow, hasHoles, snap.HasChamferFeature, snap.HasLoftedBendFeature,
                     isRoundFlatProfile, isRoundedEndFlatProfile, flatPlateSubKind,
                     canImportSketchDimensions, modelSketchDimCount,
-                    importInfo, importedShape, solidBodyCount, bboxL, bboxM, bboxS, log);
+                    importInfo, importedShape, snap.SolidBodyCount, bboxL, bboxM, bboxS, log);
 
                 var geometryResult = new PartAnalysisResult
                 {
                     Kind = kind,
-                    BendFeatureCount = bendCount,
-                    HasSheetMetalFeature = hasSheetMetal,
+                    BendFeatureCount = snap.BendCount,
+                    HasSheetMetalFeature = snap.HasSheetMetal,
                     IsHollow = isHollow,
                     HasHoles = hasHoles,
-                    HasChamfers = hasChamfers,
-                    CylindricalFaceCount = cylindricalFaces,
+                    HasChamfers = snap.HasChamferFeature,
+                    HasLoftedBendFeature = snap.HasLoftedBendFeature,
+                    CylindricalFaceCount = snap.CylindricalFaces,
                     IsRoundFlatProfile = isRoundFlatProfile,
                     IsRoundedEndFlatProfile = isRoundedEndFlatProfile,
                     CanImportSketchDimensions = canImportSketchDimensions,
@@ -222,11 +240,12 @@ namespace SolidWorksTester.Services.Analysis
                     BboxLongMeters = bboxL,
                     BboxMidMeters = bboxM,
                     BboxShortMeters = bboxS,
-                    SolidBodyCount = solidBodyCount,
+                    SolidBodyCount = snap.SolidBodyCount,
                     IsTrueCylindricalTube = isTrueCylindricalTube
                 };
 
-                CustomPropertySnapshot propertySnapshot = CustomPropertyReader.Read(partDoc);
+                CustomPropertySnapshot propertySnapshot = timer.Measure("custom properties", () =>
+                    CustomPropertyReader.Read(partDoc));
                 PropertyPartClassification propertyClassification =
                     PropertyPartClassifier.Read(propertySnapshot);
 
@@ -269,17 +288,21 @@ namespace SolidWorksTester.Services.Analysis
                 }
 
                 PartAnalysisResult merged = PartClassificationRouter.Apply(geometryResult, propertyClassification, log);
+                merged.CylinderSamples = snap.Cylinders;
                 merged.EstProperties = propertyClassification.Est;
                 merged.PropertyOrigin = propertyClassification.Origin;
                 merged.EstNameCatalogId = propertyClassification.EstNameMatch?.CatalogId;
                 merged.EstNameHasDedicatedPipeline =
-                    merged.FlatPlateSubKind == FlatPlateSubKind.FlangeGasket ||
+                    merged.FlatPlateSubKind is FlatPlateSubKind.FlangeGasket or FlatPlateSubKind.BafflePlate ||
                     propertyClassification.EstNameMatch?.HasDedicatedPipeline == true;
                 if (string.IsNullOrWhiteSpace(merged.DrawingProfile))
                     merged.DrawingProfile = propertyClassification.DrawingProfile;
                 else if (merged.FlatPlateSubKind == FlatPlateSubKind.FlangeGasket &&
                          merged.DrawingProfile.Equals("plate", StringComparison.OrdinalIgnoreCase))
                     merged.DrawingProfile = propertyClassification.DrawingProfile ?? "flange";
+                else if (merged.FlatPlateSubKind == FlatPlateSubKind.BafflePlate &&
+                         merged.DrawingProfile.Equals("plate", StringComparison.OrdinalIgnoreCase))
+                    merged.DrawingProfile = propertyClassification.DrawingProfile ?? "baffle_plate";
                 return merged;
             }
             finally
@@ -288,82 +311,24 @@ namespace SolidWorksTester.Services.Analysis
             }
         }
 
-        private static int CountSolidBodies(IModelDoc2 partDoc)
-        {
-            if (partDoc is not PartDoc part)
-                return 0;
-
-            object[]? bodies = part.GetBodies2((int)swBodyType_e.swSolidBody, true) as object[];
-            return bodies?.Length ?? 0;
-        }
-
-        private static SolidBodyAnalysisResult BuildBodyAnalysis(
-            IModelDoc2 partDoc,
-            int solidBodyCount,
-            int cylindricalFaces,
-            int planarFaces,
+        private static SolidBodyAnalysisResult BuildBodyAnalysisFromSnapshot(
+            PartGeometrySnapshot snap,
             bool isHollow,
             bool hasHoles,
             bool isCylindricalGeometry,
-            int importFeatureCount)
-        {
-            int smallCyl = 0;
-            int largeCyl = 0;
-
-            if (partDoc is PartDoc part)
+            int importFeatureCount) =>
+            new()
             {
-                object[]? bodies = part.GetBodies2((int)swBodyType_e.swSolidBody, true) as object[];
-                if (bodies != null)
-                {
-                    foreach (object bodyObj in bodies)
-                    {
-                        if (bodyObj is not Body2 body)
-                            continue;
-
-                        object[]? faces = body.GetFaces() as object[];
-                        if (faces == null)
-                            continue;
-
-                        foreach (object faceObj in faces)
-                        {
-                            if (faceObj is not Face2 face)
-                                continue;
-
-                            Surface? surf = face.GetSurface() as Surface;
-                            if (surf == null || !surf.IsCylinder())
-                                continue;
-
-                            try
-                            {
-                                double[] param = (double[])surf.CylinderParams;
-                                double radius = param[6];
-                                if (radius >= 0.015)
-                                    largeCyl++;
-                                else if (radius >= 0.001)
-                                    smallCyl++;
-                            }
-                            catch
-                            {
-                                // ignore
-                            }
-                        }
-                    }
-                }
-            }
-
-            return new SolidBodyAnalysisResult
-            {
-                SolidBodyCount = solidBodyCount,
-                CylindricalFaces = cylindricalFaces,
-                PlanarFaces = planarFaces,
-                SmallCylinderFaces = smallCyl,
-                LargeCylinderFaces = largeCyl,
+                SolidBodyCount = snap.SolidBodyCount,
+                CylindricalFaces = snap.CylindricalFaces,
+                PlanarFaces = snap.PlanarFaces,
+                SmallCylinderFaces = snap.SmallCylinderFaces,
+                LargeCylinderFaces = snap.LargeCylinderFaces,
                 IsHollow = isHollow,
                 HasHoles = hasHoles,
                 IsCylindricalGeometry = isCylindricalGeometry,
                 ImportFeatureCount = importFeatureCount
             };
-        }
 
         private static bool IsCylindricalGeometry(
             bool hasCylindricalFeature,
@@ -379,215 +344,41 @@ namespace SolidWorksTester.Services.Analysis
             return cylindricalFaces >= 3;
         }
 
-        private static void AnalyzeSolidBodies(
-            IModelDoc2 partDoc,
-            ref int cylindricalFaces,
-            ref int planarFaces,
-            ref bool isHollow,
-            ref bool hasHoles)
+        private static bool IsRoundedEndFlatPlate(PartGeometrySnapshot snap)
         {
-            PartDoc part = (PartDoc)partDoc;
-            object[]? bodies = part.GetBodies2((int)swBodyType_e.swSolidBody, true) as object[];
-            if (bodies == null || bodies.Length == 0)
-                return;
-
-            var cylinderRadii = new List<double>();
-
-            foreach (object bodyObj in bodies)
-            {
-                if (bodyObj is not Body2 body)
-                    continue;
-
-                object[]? faces = body.GetFaces() as object[];
-                if (faces == null)
-                    continue;
-
-                foreach (object faceObj in faces)
-                {
-                    if (faceObj is not Face2 face)
-                        continue;
-
-                    Surface? surf = face.GetSurface() as Surface;
-                    if (surf == null)
-                        continue;
-
-                    if (surf.IsCylinder())
-                    {
-                        cylindricalFaces++;
-                        try
-                        {
-                            double[] param = (double[])surf.CylinderParams;
-                            cylinderRadii.Add(param[6]);
-                        }
-                        catch
-                        {
-                            // ignore invalid cylinder params
-                        }
-                    }
-                    else if (surf.IsPlane())
-                    {
-                        planarFaces++;
-                    }
-                }
-            }
-
-            if (cylinderRadii.Count >= 2)
-            {
-                cylinderRadii.Sort();
-                double minR = cylinderRadii[0];
-                double maxR = cylinderRadii[^1];
-                isHollow = maxR - minR > 0.0005;
-            }
-
-            if (!hasHoles)
-            {
-                foreach (object bodyObj in bodies)
-                {
-                    if (bodyObj is not Body2 body)
-                        continue;
-
-                    object[]? faces = body.GetFaces() as object[];
-                    if (faces == null)
-                        continue;
-
-                    foreach (object faceObj in faces)
-                    {
-                        if (faceObj is not Face2 face)
-                            continue;
-
-                        Surface? surf = face.GetSurface() as Surface;
-                        if (surf != null && surf.IsCylinder())
-                        {
-                            try
-                            {
-                                double[] param = (double[])surf.CylinderParams;
-                                // Hole-sized cylinders (1–50 mm) on parts with fillets/tubes.
-                                if (param[6] >= 0.001 && param[6] < 0.05)
-                                    hasHoles = true;
-                            }
-                            catch
-                            {
-                                // ignore
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Detects round flat discs from bounding box: two similar large dimensions and one thin gauge.
-        /// </summary>
-        private static bool IsRoundFlatDisc(IModelDoc2 partDoc)
-        {
-            if (partDoc is not PartDoc part)
+            if (snap.BboxSortedDims.Length < 3)
                 return false;
 
-            double[] box = (double[])part.GetPartBox(true);
-            double[] dims =
-            {
-                Math.Abs(box[3] - box[0]),
-                Math.Abs(box[4] - box[1]),
-                Math.Abs(box[5] - box[2])
-            };
-            Array.Sort(dims);
-
-            const double minThickness = 0.0005;  // 0.5 mm
-            const double minFlatRatio = 5.0;     // diameter / thickness
-            const double roundTolerance = 0.06;  // 6 % difference between large dims
-
-            if (dims[0] < minThickness)
-                return false;
-
-            if (dims[1] / dims[0] < minFlatRatio)
-                return false;
-
-            double roundDelta = Math.Abs(dims[2] - dims[1]) / dims[1];
-            return roundDelta <= roundTolerance;
-        }
-
-        /// <summary>
-        /// Flat rectangular-ish plate with a large outer cylindrical face (rounded end profile).
-        /// </summary>
-        private static bool IsRoundedEndFlatPlate(IModelDoc2 partDoc)
-        {
-            if (partDoc is not PartDoc part)
-                return false;
-
-            double[] box = (double[])part.GetPartBox(true);
-            double[] dims =
-            {
-                Math.Abs(box[3] - box[0]),
-                Math.Abs(box[4] - box[1]),
-                Math.Abs(box[5] - box[2])
-            };
-            Array.Sort(dims);
+            double s = snap.BboxSortedDims[0];
+            double m = snap.BboxSortedDims[1];
+            double l = snap.BboxSortedDims[2];
 
             const double minThickness = 0.0005;
             const double minFlatRatio = 3.0;
             const double minAspect = 1.08;
 
-            if (dims[0] < minThickness || dims[1] / dims[0] < minFlatRatio)
+            if (s < minThickness || m / Math.Max(s, 1e-12) < minFlatRatio)
                 return false;
 
-            double aspect = dims[2] / dims[1];
-            if (aspect < minAspect)
+            if (l / Math.Max(m, 1e-12) < minAspect)
                 return false;
 
-            return HasLargeOuterCylinderFace(partDoc, minRadiusMeters: 0.025);
-        }
-
-        private static bool HasLargeOuterCylinderFace(IModelDoc2 partDoc, double minRadiusMeters)
-        {
-            if (partDoc is not PartDoc part)
+            // Dense perforated plates are baffles, not rounded-end.
+            if (snap.HasLinearOrFillPattern || snap.CylindricalFaces >= 80)
                 return false;
 
-            object[]? bodies = part.GetBodies2((int)swBodyType_e.swSolidBody, true) as object[];
-            if (bodies == null)
-                return false;
-
-            foreach (object bodyObj in bodies)
-            {
-                if (bodyObj is not Body2 body)
-                    continue;
-
-                object[]? faces = body.GetFaces() as object[];
-                if (faces == null)
-                    continue;
-
-                foreach (object faceObj in faces)
-                {
-                    if (faceObj is not Face2 face)
-                        continue;
-
-                    Surface? surf = face.GetSurface() as Surface;
-                    if (surf == null || !surf.IsCylinder())
-                        continue;
-
-                    try
-                    {
-                        double[] param = (double[])surf.CylinderParams;
-                        if (param[6] >= minRadiusMeters)
-                            return true;
-                    }
-                    catch
-                    {
-                        // ignore
-                    }
-                }
-            }
-
-            return false;
+            return snap.HasLargeOuterCylinderFace;
         }
 
         private static void LogPartType(
             PartModelKind kind,
             bool hasSheetMetal,
             int bendCount,
-            List<string> bendNames,
+            IReadOnlyList<string> bendNames,
             bool isHollow,
             bool hasHoles,
             bool hasChamfers,
+            bool hasLoftedBend,
             bool isRoundFlatProfile,
             bool isRoundedEndFlatProfile,
             FlatPlateSubKind flatPlateSubKind,
@@ -603,6 +394,11 @@ namespace SolidWorksTester.Services.Analysis
         {
             switch (kind)
             {
+                case PartModelKind.LoftedBends:
+                    log($"Part type: Lofted Bends sheet-metal shell " +
+                        $"({bendCount} bend feature(s): {string.Join(", ", bendNames)}).");
+                    break;
+
                 case PartModelKind.BentSheetMetal:
                     log($"Part type: Bent sheet metal ({bendCount} bend feature(s): {string.Join(", ", bendNames)}).");
                     break;
@@ -617,6 +413,8 @@ namespace SolidWorksTester.Services.Analysis
                         log("  Rounded-end flat plate profile detected.");
                     if (flatPlateSubKind == FlatPlateSubKind.FlangeGasket)
                         log("  Flange/gasket profile detected (circular hole pattern).");
+                    if (flatPlateSubKind == FlatPlateSubKind.BafflePlate)
+                        log("  Baffle / perforated plate detected (dense hole array).");
                     if (canImportSketchDimensions)
                         log($"  Sketch dimensions on model ({modelSketchDimCount}) — eligible for drawing import.");
                     break;
@@ -627,6 +425,8 @@ namespace SolidWorksTester.Services.Analysis
                         log("  Detected hole features.");
                     if (hasChamfers)
                         log("  Detected chamfer/fillet features.");
+                    if (hasLoftedBend)
+                        log("  Note: LoftedBend also present — prefer Lofted Bends pipeline if SM.");
                     break;
 
                 case PartModelKind.ImportedGeometry:

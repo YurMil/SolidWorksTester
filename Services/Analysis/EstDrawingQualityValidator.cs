@@ -38,10 +38,28 @@ namespace SolidWorksTester.Services.Analysis
                 return report;
             }
 
+            if (analysis.Kind == PartModelKind.LoftedBends ||
+                family == "SHELL" ||
+                family.Contains("SHELL"))
+            {
+                ValidateShell(est, drawingDimensions, report);
+                return report;
+            }
+
             if (analysis.Kind == PartModelKind.Cylindrical ||
                 family.Contains("PIPE") || family.Contains("TUBE"))
             {
                 ValidatePipe(est, drawingDimensions, report);
+                return report;
+            }
+
+            if (analysis.FlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                EstPartPropertiesParser.DescriptionIndicatesBafflePlate(est.Description) ||
+                family.Contains("BAFFLE"))
+            {
+                // DIM1 on baffles is often a series code (e.g. 6), not thickness.
+                ValidateBaffle(est, drawingDimensions, report);
                 return report;
             }
 
@@ -64,7 +82,15 @@ namespace SolidWorksTester.Services.Analysis
             Action<string> log)
         {
             var dims = DrawingDimensionCollector.Collect(drawing);
-            EstDrawingQualityReport report = Validate(analysis, dims);
+            ValidateAndLog(analysis, dims, log);
+        }
+
+        public static void ValidateAndLog(
+            PartAnalysisResult analysis,
+            IReadOnlyList<DrawingDimensionSample> drawingDimensions,
+            Action<string> log)
+        {
+            EstDrawingQualityReport report = Validate(analysis, drawingDimensions);
             LogReport(report, log);
         }
 
@@ -84,6 +110,19 @@ namespace SolidWorksTester.Services.Analysis
                 log($"    [{flag}]");
             foreach (string note in report.Notes)
                 log($"    {note}");
+        }
+
+        private static void ValidateShell(
+            EstPartProperties est,
+            IReadOnlyList<DrawingDimensionSample> dims,
+            EstDrawingQualityReport report)
+        {
+            var linears = ExtractLinearsMm(dims).ToList();
+            // SHELL EST: DIM1=thickness, DIM2=height, DIM3=developed length; OD from Description.
+            if (est.Dim1Mm is > 0 and <= 40)
+                CheckValue(report, "thickness", est.Dim1Mm, linears);
+            CheckValue(report, "height", est.Dim2Mm, linears);
+            CheckValue(report, "flat_length", est.Dim3Mm, linears);
         }
 
         private static void ValidatePipe(
@@ -125,6 +164,20 @@ namespace SolidWorksTester.Services.Analysis
             CheckValue(report, "thickness", est.Dim1Mm, all);
             CheckValue(report, "width", est.Dim2Mm, all);
             CheckValue(report, "plate_length", est.Dim3Mm, all);
+        }
+
+        private static void ValidateBaffle(
+            EstPartProperties est,
+            IReadOnlyList<DrawingDimensionSample> dims,
+            EstDrawingQualityReport report)
+        {
+            var linears = ExtractLinearsMm(dims)
+                .Where(v => v > 0 && v <= 80)
+                .ToList();
+
+            // Only Dim3 is treated as gauge; Dim1 is often a baffle series index.
+            if (est.Dim3Mm is > 0 and <= 80)
+                CheckValue(report, "thickness", est.Dim3Mm, linears);
         }
 
         private static void ValidateFlange(

@@ -1,6 +1,8 @@
 using System;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using SolidWorksTester.Services.Analysis;
+using SolidWorksTester.Services.Drawing.Routing;
 
 namespace SolidWorksTester.Services.Drawing
 {
@@ -14,22 +16,37 @@ namespace SolidWorksTester.Services.Drawing
             ISldWorks swApp,
             IModelDoc2 drawingModel,
             string partPath,
+            PartAnalysisResult analysis,
+            DrawingRouteDecision route,
             Action<string> log)
         {
             var drawing = (IDrawingDoc)drawingModel;
+            using var timer = new PipelineStopwatch(log, $"pipeline {route.PipelineLabel}");
 
-            log("Using bent sheet metal drawing pipeline (3 views + flat pattern).");
+            log($"Using bent sheet metal drawing pipeline (3 views + flat pattern). [{route.PipelineLabel}]");
+            _ = analysis;
 
-            DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log);
-            DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log);
-            CreateFlatPatternView(drawingModel, drawing, partPath, log);
-            DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log);
-            ApplyDimensions(swApp, drawingModel, drawing, log);
-            log("Checking for duplicate dimensions...");
-            DrawingDimensionDeduper.RemoveDuplicateDimensions(drawingModel, drawing, log);
-            DrawingPipelineShared.AutoArrangeDimensions(drawingModel, drawing);
-            DrawingPipelineShared.AdjustSheetScaleIfNeeded(drawingModel, drawing, log);
-            drawingModel.ForceRebuild3(true);
+            timer.Measure("delete existing views", () =>
+                DrawingPipelineShared.DeleteExistingViews(drawingModel, drawing, log));
+            timer.Measure("create standard views", () =>
+                DrawingPipelineShared.CreateStandardThreeViews(drawingModel, drawing, partPath, log));
+            timer.Measure("create flat pattern view", () =>
+                CreateFlatPatternView(drawingModel, drawing, partPath, log));
+            timer.Measure("apply HLV display mode", () =>
+                DrawingViewDisplayHelper.ApplyHiddenLinesVisibleToAllModelViews(drawingModel, drawing, log));
+            timer.Measure("apply dimensions", () =>
+                ApplyDimensions(swApp, drawingModel, drawing, log));
+            timer.Measure("dedupe dimensions", () =>
+            {
+                log("Checking for duplicate dimensions...");
+                DrawingDimensionDeduper.RemoveDuplicateDimensions(drawingModel, drawing, log);
+            });
+            timer.Measure("auto-arrange dimensions", () =>
+                DrawingPipelineShared.AutoArrangeDimensions(drawingModel, drawing));
+            timer.Measure("sheet layout normalize", () =>
+                SheetLayoutNormalizer.Arrange(drawingModel, drawing, log));
+            timer.Measure("force rebuild", () =>
+                drawingModel.ForceRebuild3(true));
         }
 
         private static void CreateFlatPatternView(
@@ -225,19 +242,19 @@ namespace SolidWorksTester.Services.Drawing
                     bool isFlat = dimView.IsFlatPatternView();
                     log($"  Dimensions: {vName} (flat pattern={isFlat})");
 
-                    SmartDimOverall.Add(dimHelper, dimView);
+                    SmartDimOverall.Add(dimHelper, dimView, log);
 
                     if (!isFlat)
                     {
-                        SmartDimThickness.Add(dimHelper, dimView);
-                        SmartDimHolePositions.Add(dimHelper, dimView);
-                        SmartDimCutouts.Add(dimHelper, dimView);
-                        SmartDimBends.Add(dimHelper, dimView);
+                        SmartDimThickness.Add(dimHelper, dimView, log);
+                        SmartDimHolePositions.Add(dimHelper, dimView, log);
+                        SmartDimCutouts.Add(dimHelper, dimView, log);
+                        SmartDimBends.Add(dimHelper, dimView, log);
                     }
                     else
                     {
-                        SmartDimHoles.Add(dimHelper, dimView);
-                        SmartDimFlatBendLines.Add(dimHelper, dimView);
+                        SmartDimHoles.Add(dimHelper, dimView, log);
+                        SmartDimFlatBendLines.Add(dimHelper, dimView, log);
                     }
 
                     dimView = dimView.GetNextView() as IView;

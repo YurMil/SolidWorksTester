@@ -9,6 +9,8 @@ namespace SolidWorksTester.Services.Drawing.Routing
         Cylindrical = 3,
         ImportedGeometry = 4,
         /// <summary>Views + minimal shared dims when kind/pipeline is ambiguous.</summary>
-        GenericFallback = 5
+        GenericFallback = 5,
+        /// <summary>Lofted-bend sheet-metal shell: ortho + flat pattern (inner up).</summary>
+        LoftedBends = 6
     }
 }

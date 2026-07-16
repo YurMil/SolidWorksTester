@@ -6,6 +6,9 @@ obj/
 SolidWorksTester.exe
 SolidWorksTester.pdb
 *.exe.WebView2/
+*.7z
+*.zip
+!Docs/**/*.zip
 
 # NuGet / tooling artifacts copied to project root
 Microsoft.Web.WebView2*.xml

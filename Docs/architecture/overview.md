@@ -7,11 +7,11 @@
 **Sheet Metal Drawing Generator** is a Windows desktop utility that:
 
 1. Connects to a local SOLIDWORKS instance via COM.
-2. Classifies each `.SLDPRT` into a drawing pipeline.
+2. Classifies each `.SLDPRT` into a drawing pipeline (geometry + EST/custom properties).
 3. Creates or updates a `.SLDDRW` next to the part using a user-selected template.
 4. Inserts standard views and automated dimensions/annotations.
 
-The application is **batch-oriented**: the UI collects parts and a template, then processes them sequentially on a background thread.
+The application is **batch-oriented**: the UI collects parts and a template, then processes them sequentially on a background STA worker.
 
 ---
 
@@ -29,52 +29,77 @@ flowchart TB
         SWC[SolidWorksConnection]
         SMS[SheetMetalDrawingService]
         ANA[PartModelAnalyzer]
+        CLS[PartClassificationRouter]
+    end
+
+    subgraph Routing["Routing"]
+        RTR[DrawingPipelineRouter]
+        EXE[DrawingPipelineExecutor]
+        EST[EstNameRegistry / EstCatalogRouteTable]
     end
 
     subgraph Drawing["Drawing pipelines"]
         FP[FlatPlateDrawingPipeline]
         BS[BentSheetMetalDrawingPipeline]
         CY[CylindricalDrawingPipeline]
+        LB[LoftedBendsDrawingPipeline]
+        IM[ImportedGeometryDrawingPipeline]
+        GF[GenericFallbackDrawingPipeline]
         SH[DrawingPipelineShared]
     end
 
     subgraph Annotations["Annotation modules"]
-        SD[SmartDim modules A–G]
-        RFP[RoundFlatPlate/*]
-        CYL[Cylindrical/*]
+        SD[SmartDim/Modules A–G]
+        RFP[RoundFlatPlate]
+        FG[FlangeGasket]
+        BP[BafflePlate]
+        CYL[Cylindrical]
+        LBD[LoftedBends dims]
     end
 
     MF --> SWC
     MF --> SMS
     SMS --> ANA
-    SMS --> FP
-    SMS --> BS
-    SMS --> CY
+    ANA --> CLS
+    ANA --> EST
+    SMS --> RTR
+    RTR --> EXE
+    EXE --> FP
+    EXE --> BS
+    EXE --> CY
+    EXE --> LB
+    EXE --> IM
+    EXE --> GF
     FP --> SH
     BS --> SH
     CY --> SH
     FP --> SD
     FP --> RFP
+    FP --> FG
+    FP --> BP
     BS --> SD
     CY --> CYL
+    LB --> LBD
 ```
 
 ---
 
 ## Primary extension seam
 
-Almost all new drawing behaviour extends along this chain:
-
 ```
-PartModelKind  →  *DrawingPipeline  →  SmartDim / specialised modules
+PartModelKind / EST catalog
+  → DrawingPipelineRouter (DrawingRouteDecision)
+  → DrawingPipelineExecutor
+  → *DrawingPipeline.Process(..., analysis, route, log)
+  → SmartDim / specialised modules
 ```
 
 | Layer | Stable contract | Typical change |
 | --- | --- | --- |
-| `PartModelKind` | Enum value | New part family (e.g. weldment) |
-| `PartModelAnalyzer` | `PartAnalysisResult` | New detection heuristics |
-| `*DrawingPipeline` | `Process(ISldWorks, IModelDoc2, …)` | View layout, module order |
-| SmartDim / modules | `Add(SmartDimHelper, IView, …)` | New annotation type |
+| `PartModelKind` / EST registry | Enum + catalog id | New part family |
+| `DrawingPipelineId` + Executor | Route decision | New top-level pipeline |
+| `FlatPlateSubKind` + DimRouter | Nested flat families | Baffle / flange / disc |
+| SmartDim / modules | `Add(..., log)` | New annotation type |
 
 UI and COM connection code rarely need changes for new drawing logic.
 
@@ -86,6 +111,7 @@ UI and COM connection code rarely need changes for new drawing logic.
 | --- | --- |
 | **x64 process** | SOLIDWORKS is 64-bit; COM must match bitness |
 | **Silent part open for analysis** | Faster batch; part closed immediately after classify |
+| **Router + Executor** | Classification and dispatch stay testable without COM |
 | **Pipeline per part type** | Orthographic + flat pattern vs isometric layouts differ |
 | **Drawing-only annotations** | Model is read-only; no feature edits on the part |
 | **Session `DimensionedFeatures` set** | Prevents duplicate dims within one drawing pass |
@@ -99,11 +125,11 @@ UI and COM connection code rarely need changes for new drawing logic.
 | Thread | Work |
 | --- | --- |
 | UI (STA) | WinForms message loop, file dialogs |
-| `Task.Run` worker | SOLIDWORKS COM calls, batch loop |
+| STA worker (`StaTaskRunner`) | SOLIDWORKS COM calls, batch loop |
 
-All UI updates from the worker use `InvokeRequired` / `BeginInvoke` in `MainForm` (`AppendLog`, `UpdateStatus`, `UpdateProgress`).
+All UI updates from the worker use `InvokeRequired` / `BeginInvoke` in `MainForm`.
 
-**Important:** SOLIDWORKS COM calls must stay on the worker thread used for the batch; do not invoke COM from multiple threads without marshalling.
+**Important:** SOLIDWORKS COM calls must stay on the worker thread used for the batch.
 
 ---
 
@@ -116,13 +142,12 @@ All UI updates from the worker use `InvokeRequired` / `BeginInvoke` in `MainForm
 | `Markdig` | Release notes Markdown → HTML |
 | `Microsoft.Web.WebView2` | In-app documentation viewer |
 
-No WPF, no third-party UI framework — keeps the published EXE lean.
-
 ---
 
 ## See also
 
 - [Project structure](project-structure.md)
 - [Data flow](data-flow.md)
+- [Pipeline router](../drawing/pipeline-router.md)
 - [COM connection](../solidworks-api/com-connection.md)
 - [Pipelines overview](../drawing/pipelines-overview.md)

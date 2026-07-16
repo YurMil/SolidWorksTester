@@ -11,6 +11,10 @@ namespace SolidWorksTester
         public bool SelectEdge(Edge edge, IView view, bool append) =>
             TrySelectEntity((Entity)edge, view, append);
 
+        /// <summary>Selects a vertex in the context of a drawing view.</summary>
+        public bool SelectVertex(Vertex vertex, IView view, bool append) =>
+            TrySelectEntity((Entity)vertex, view, append);
+
         /// <summary>Selects a face in the context of a drawing view.</summary>
         public bool SelectFace(Face2 face, IView view, bool append) =>
             TrySelectEntity((Entity)face, view, append);

@@ -26,8 +26,9 @@ WinForms utility for batch-creating SOLIDWORKS sheet-metal drawings (`.SLDDRW`) 
 ```powershell
 git clone https://github.com/YurMil/SolidWorksTester.git
 cd SolidWorksTester
-dotnet build -c Release
-dotnet run -c Release
+dotnet build SolidWorksTester.sln -c Release
+dotnet test SolidWorksTester.sln -c Release
+dotnet run --project SolidWorksTester.csproj -c Release
 ```
 
 Run SOLIDWORKS at the **same privilege level** as this app (both normal user or both admin).
@@ -52,13 +53,18 @@ End-user release notes: [`Docs/ReleaseNotes/`](Docs/ReleaseNotes/)
 
 ```
 SolidWorksTester/
-├── Services/          COM connection, analysis, drawing pipelines
-├── SmartDim/          Dimensioning helper + modules A–G
-├── RoundFlatPlate/    Round disc annotations
-├── Cylindrical/       Pipe / cylinder annotations
-├── UI/                WinForms shell, theme, release-notes viewer
-├── Docs/              Developer + user documentation
-└── publish.bat        Standalone EXE publish script
+├── Services/                 COM, analysis, drawing pipelines, routing
+├── SmartDim/                 Helper + Modules/ A–G
+├── BafflePlate/              Baffle / tube-sheet dims
+├── FlangeGasket/             Flange / gasket dims
+├── LoftedBends/              Shell lofted-bend pipeline
+├── Imported/                 Imported geometry dims
+├── RoundFlatPlate/           Round disc annotations
+├── Cylindrical/              Pipe / cylinder annotations
+├── UI/                       WinForms shell, theme, release-notes viewer
+├── Docs/                     Developer + user documentation
+├── SolidWorksTester.Tests/   Unit tests (no SOLIDWORKS)
+└── publish.bat               Standalone EXE publish script
 ```
 
 ## License

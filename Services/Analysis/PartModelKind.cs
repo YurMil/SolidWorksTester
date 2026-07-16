@@ -5,6 +5,8 @@ namespace SolidWorksTester.Services.Analysis
         BentSheetMetal,
         FlatPlate,
         Cylindrical,
-        ImportedGeometry
+        ImportedGeometry,
+        /// <summary>Sheet-metal lofted bend shell (rolled cylinder) — needs flat pattern + OD/height dims.</summary>
+        LoftedBends
     }
 }

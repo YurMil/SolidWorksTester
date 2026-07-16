@@ -21,15 +21,20 @@ namespace SolidWorksTester.Services.Drawing.Routing
                     break;
 
                 case DrawingPipelineId.BentSheetMetal:
-                    BentSheetMetalDrawingPipeline.Process(swApp, drawingModel, partPath, log);
+                    BentSheetMetalDrawingPipeline.Process(swApp, drawingModel, partPath, analysis, route, log);
                     break;
 
                 case DrawingPipelineId.Cylindrical:
-                    CylindricalDrawingPipeline.Process(swApp, drawingModel, partPath, analysis, log);
+                    CylindricalDrawingPipeline.Process(swApp, drawingModel, partPath, analysis, route, log);
+                    break;
+
+                case DrawingPipelineId.LoftedBends:
+                    LoftedBends.LoftedBendsDrawingPipeline.Process(
+                        swApp, drawingModel, partPath, analysis, route, log);
                     break;
 
                 case DrawingPipelineId.ImportedGeometry:
-                    ImportedGeometryDrawingPipeline.Process(swApp, drawingModel, partPath, analysis, log);
+                    ImportedGeometryDrawingPipeline.Process(swApp, drawingModel, partPath, analysis, route, log);
                     break;
 
                 case DrawingPipelineId.GenericFallback:

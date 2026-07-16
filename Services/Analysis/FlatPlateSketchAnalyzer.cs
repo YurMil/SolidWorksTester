@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 
@@ -8,20 +7,11 @@ namespace SolidWorksTester.Services.Analysis
     /// <summary>
     /// Detects flat sheet-metal parts whose sketch dimensions can be imported onto a drawing
     /// (no move-face / boss additions after the base profile).
+    /// Disqualifying feature flags come from <see cref="PartGeometrySnapshot"/> — no extra tree walk.
     /// </summary>
     internal static class FlatPlateSketchAnalyzer
     {
         private const double MinDimensionMeters = 0.0001;
-
-        private static readonly HashSet<string> DisqualifyingFeatureTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "MoveFace", "MoveFace2", "MoveBody", "Indent", "BossExtrude", "ExtrudeBoss",
-            "Boss", "SweepBoss", "LoftBoss", "RevolveBoss", "BoundaryBoss",
-            "Thicken", "CombineBodies", "SplitBody", "Split", "MirrorSolid",
-            "ReplaceFace", "DeleteFace", "ScaleFeature", "Freeform", "Dome",
-            "RuledSurfaceFromEdge", "LocalChainPattern", "MoveCopyBody", "Cavity",
-            "DerivedPartSolid", "InsertPart", "VarFillet", "Wrap", "Flex"
-        };
 
         public static int CountPartDisplayDimensions(IModelDoc2 partDoc)
         {
@@ -45,36 +35,23 @@ namespace SolidWorksTester.Services.Analysis
             return count;
         }
 
-        public static bool HasDisqualifyingFeatures(IModelDoc2 partDoc)
-        {
-            Feature? feat = partDoc.FirstFeature() as Feature;
-            while (feat != null)
-            {
-                string typeName = feat.GetTypeName2();
-                if (DisqualifyingFeatureTypes.Contains(typeName))
-                    return true;
-
-                feat = feat.GetNextFeature() as Feature;
-            }
-
-            return false;
-        }
-
-        public static bool CanImportSketchDimensions(
-            IModelDoc2 partDoc,
+        /// <summary>
+        /// True when sheet-metal / bend / disqualifier gates allow sketch import
+        /// (before counting display dimensions).
+        /// </summary>
+        public static bool IsEligibleForSketchImport(
             bool hasSheetMetal,
             int bendCount,
-            int displayDimensionCount)
-        {
-            if (!hasSheetMetal || bendCount > 0)
-                return false;
+            bool hasDisqualifyingFeatures) =>
+            hasSheetMetal && bendCount == 0 && !hasDisqualifyingFeatures;
 
-            if (HasDisqualifyingFeatures(partDoc))
-                return false;
-
-            // At least two driving dimensions visible on the 3D model (overall + feature).
-            return displayDimensionCount >= 2;
-        }
+        public static bool CanImportSketchDimensions(
+            bool hasSheetMetal,
+            int bendCount,
+            bool hasDisqualifyingFeatures,
+            int displayDimensionCount) =>
+            IsEligibleForSketchImport(hasSheetMetal, bendCount, hasDisqualifyingFeatures) &&
+            displayDimensionCount >= 2;
 
         private static bool TryGetDimensionValue(DisplayDimension displayDim, out double value)
         {

@@ -18,6 +18,19 @@ namespace SolidWorksTester
             Model.AddDimension2(textX, textY, 0.0) as DisplayDimension;
 
         /// <summary>
+        /// Forces a linear dimension (avoids angular when two non-parallel edges are selected).
+        /// </summary>
+        public DisplayDimension? CreateLinearDimension(double textX, double textY)
+        {
+            int err = 0;
+            DisplayDimension? dim = Ext.AddSpecificDimension(
+                textX, textY, 0.0,
+                (int)swDimensionType_e.swLinearDimension,
+                ref err) as DisplayDimension;
+            return dim ?? CreateDimension(textX, textY);
+        }
+
+        /// <summary>
         /// Angular dimension; two lines/edges must be pre-selected.
         /// Does not fall back to <see cref="IModelDoc2.AddDimension2"/> (that creates a linear chord).
         /// </summary>

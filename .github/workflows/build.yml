@@ -20,7 +20,10 @@ jobs:
           dotnet-version: 9.0.x
 
       - name: Restore
-        run: dotnet restore SolidWorksTester.csproj
+        run: dotnet restore SolidWorksTester.sln
 
       - name: Build Release
-        run: dotnet build SolidWorksTester.csproj -c Release --no-restore
+        run: dotnet build SolidWorksTester.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SolidWorksTester.sln -c Release --no-build --verbosity normal

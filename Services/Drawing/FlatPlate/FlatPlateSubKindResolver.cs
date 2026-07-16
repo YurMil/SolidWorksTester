@@ -18,6 +18,10 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             SmartDimHelper dimHelper,
             IDrawingDoc drawing)
         {
+            // Baffle before flange — dense arrays must not enter flange bolt-circle pipeline.
+            if (TryResolveBaffleOverride(analysis, route, dimHelper, drawing, out FlatPlateDimContext? baffleContext))
+                return baffleContext!;
+
             if (TryResolveFlangeOverride(analysis, route, dimHelper, drawing, out FlatPlateDimContext? flangeContext))
                 return flangeContext!;
 
@@ -29,6 +33,9 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             {
                 return BuildFromSubKind(analysis.FlatPlateSubKind, dimHelper, drawing);
             }
+
+            if (analysis.FlatPlateSubKind == FlatPlateSubKind.BafflePlate)
+                return BuildFromSubKind(FlatPlateSubKind.BafflePlate, dimHelper, drawing);
 
             if (analysis.FlatPlateSubKind == FlatPlateSubKind.FlangeGasket ||
                 FlangeGasketViewAnalyzer.DetectFromDrawing(dimHelper, drawing))
@@ -73,6 +80,32 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             };
         }
 
+        private static bool TryResolveBaffleOverride(
+            PartAnalysisResult analysis,
+            DrawingRouteDecision route,
+            SmartDimHelper dimHelper,
+            IDrawingDoc drawing,
+            out FlatPlateDimContext? context)
+        {
+            context = null;
+            bool geometryBaffle = analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                                  analysis.FlatPlateSubKind == FlatPlateSubKind.BafflePlate;
+            bool descriptionBaffle = EstPartPropertiesParser.DescriptionIndicatesBafflePlate(
+                analysis.EstProperties.Description);
+            bool forcedBaffle = route.ForcedFlatPlateSubKind == FlatPlateSubKind.BafflePlate;
+
+            if (!geometryBaffle && !descriptionBaffle && !forcedBaffle)
+                return false;
+
+            // Do not override an explicit non-baffle dedicated sub-kind (except Generic/Unknown).
+            FlatPlateSubKind forced = route.ForcedFlatPlateSubKind ?? analysis.FlatPlateSubKind;
+            if (forced is FlatPlateSubKind.FlangeGasket or FlatPlateSubKind.RoundDisc or FlatPlateSubKind.RoundedEnd)
+                return false;
+
+            context = BuildFromSubKind(FlatPlateSubKind.BafflePlate, dimHelper, drawing);
+            return true;
+        }
+
         private static bool TryResolveFlangeOverride(
             PartAnalysisResult analysis,
             DrawingRouteDecision route,
@@ -81,6 +114,12 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             out FlatPlateDimContext? context)
         {
             context = null;
+
+            if (analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                analysis.FlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
+                EstPartPropertiesParser.DescriptionIndicatesBafflePlate(analysis.EstProperties.Description))
+                return false;
+
             bool geometryFlange = analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.FlangeGasket;
             bool drawingFlange = FlangeGasketViewAnalyzer.DetectFromDrawing(dimHelper, drawing);
             bool descriptionFlange = EstPartPropertiesParser.DescriptionIndicatesFlangeOrGasket(
@@ -104,6 +143,18 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
         {
             switch (subKind)
             {
+                case FlatPlateSubKind.BafflePlate:
+                {
+                    // Outline-only: never walk dense hole edges / flange disc detection here.
+                    IView? primary = FlatPlateViewAnalyzer.FindPrimaryFlatLyingViewByOutline(drawing);
+                    return new FlatPlateDimContext
+                    {
+                        SubKind = FlatPlateSubKind.BafflePlate,
+                        PrimaryFlatView = primary,
+                        DiscFaceView = primary
+                    };
+                }
+
                 case FlatPlateSubKind.FlangeGasket:
                 {
                     IView? discView = FlangeGasketViewAnalyzer.FindPrimaryDiscView(dimHelper, drawing);
@@ -143,6 +194,8 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
 
         public static string DescribeSubKind(FlatPlateSubKind subKind) => subKind switch
         {
+            FlatPlateSubKind.BafflePlate =>
+                "Baffle plate mode: import profile/tabs; thickness; skip dense hole flood (Detail/ordinate later).",
             FlatPlateSubKind.FlangeGasket => "Flange/gasket mode: OD, ID, BCD, pattern angle, hole qty, thickness.",
             FlatPlateSubKind.RoundDisc => "Round flat plate mode: OD, centerlines, side-view thickness.",
             FlatPlateSubKind.RoundedEnd => "Rounded-end flat plate mode: overall, outer arc, holes, thickness.",

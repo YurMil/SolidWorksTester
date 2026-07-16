@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using SolidWorks.Interop.sldworks;
+using SolidWorksTester.Services.Analysis;
 
 namespace SolidWorksTester.Cylindrical
 {
@@ -10,6 +11,8 @@ namespace SolidWorksTester.Cylindrical
     public static class CylindricalDimSizes
     {
         private const double MinSizeMeters = 0.0001;
+        private const double MinWallMeters = 0.0005;
+        private const double MaxWallMeters = 0.080;
         private const double DimOffset = 0.012;
 
         /// <summary>End-face view below front view (top view in standard 3-view layout).</summary>
@@ -18,7 +21,7 @@ namespace SolidWorksTester.Cylindrical
         public static void Add(
             SmartDimHelper h,
             IView view,
-            bool isHollow,
+            PartAnalysisResult analysis,
             Action<string> log)
         {
             string viewName = view.GetName2();
@@ -26,15 +29,24 @@ namespace SolidWorksTester.Cylindrical
             if (edges.Length == 0)
                 return;
 
-            var profileCircles = edges
-                .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinSizeMeters)
-                .OrderByDescending(h.GetCircleRadius)
-                .ToArray();
+            // Full circles OR arcs (lengthwise-cut pipes show semi-circular profiles).
+            Edge[] profileCircles = CylindricalViewAnalyzer.GetEndFaceCircles(h, view, edges);
 
-            if (profileCircles.Length > 0)
+            bool isEndFaceView =
+                CylindricalViewAnalyzer.IsEndFaceView(h, view, edges) ||
+                viewName.Equals(EndFaceViewName, StringComparison.OrdinalIgnoreCase);
+
+            // Named end view with arcs but weak classifier — still treat as end if ≥1 profile arc.
+            if (!isEndFaceView &&
+                viewName.Equals(EndFaceViewName, StringComparison.OrdinalIgnoreCase) &&
+                profileCircles.Length > 0)
             {
-                bool isEndFaceView = viewName.Equals(EndFaceViewName, StringComparison.OrdinalIgnoreCase);
-                AddEndViewDimensions(h, view, viewName, profileCircles, isHollow, isEndFaceView, log);
+                isEndFaceView = true;
+            }
+
+            if (profileCircles.Length > 0 && isEndFaceView)
+            {
+                AddEndViewDimensions(h, view, viewName, profileCircles, analysis, log);
             }
             else
             {
@@ -42,31 +54,133 @@ namespace SolidWorksTester.Cylindrical
             }
         }
 
+        /// <summary>Backward-compatible overload.</summary>
+        public static void Add(
+            SmartDimHelper h,
+            IView view,
+            bool isHollow,
+            Action<string> log)
+        {
+            Add(h, view, new PartAnalysisResult
+            {
+                IsHollow = isHollow,
+                HasHoles = isHollow,
+                Kind = PartModelKind.Cylindrical,
+                EstProperties = new EstPartProperties()
+            }, log);
+        }
+
         private static void AddEndViewDimensions(
             SmartDimHelper h,
             IView view,
             string viewName,
             Edge[] profileCircles,
-            bool isHollow,
-            bool isEndFaceView,
+            PartAnalysisResult analysis,
             Action<string> log)
         {
             Edge outer = profileCircles[0];
             double outerRadius = h.GetCircleRadius(outer);
+            bool cutPipe = profileCircles.Any(e => !h.IsFullCircle(e));
+            if (cutPipe)
+                log($"  End view {viewName}: cut/half pipe profile (arcs).");
+
             if (outerRadius > MinSizeMeters)
                 TryDiameterDimension(h, view, viewName, outer, outerRadius * 2.0, "OD", log);
 
-            if (isHollow && isEndFaceView && profileCircles.Length >= 2)
+            double? expectedWall = analysis.EstProperties.Dim3Mm is double w && w > 0.4 && w <= 80
+                ? w / 1000.0
+                : null;
+
+            if (!TryPickInnerCircle(h, view, profileCircles, outer, expectedWall, out Edge inner, out double wall))
             {
-                Edge inner = profileCircles[^1];
-                double innerRadius = h.GetCircleRadius(inner);
-                if (innerRadius > MinSizeMeters &&
-                    Math.Abs(outerRadius - innerRadius) > MinSizeMeters)
+                if (analysis.IsHollow || analysis.HasHoles || cutPipe || IsPipeEstName(analysis))
+                    log($"  Wall/ID: end view {viewName} has no concentric inner arc/circle.");
+                return;
+            }
+
+            bool treatAsTube =
+                analysis.IsHollow ||
+                analysis.HasHoles ||
+                cutPipe ||
+                expectedWall.HasValue ||
+                IsPipeEstName(analysis) ||
+                (wall >= MinWallMeters && wall <= MaxWallMeters);
+
+            if (!treatAsTube)
+                return;
+
+            TryWallThickness(h, view, viewName, inner, outer, wall, log);
+            TryInnerDiameterInParentheses(
+                h, view, viewName, inner, h.GetCircleRadius(inner) * 2.0, log);
+        }
+
+        private static bool IsPipeEstName(PartAnalysisResult analysis)
+        {
+            string? name = analysis.EstProperties.Name;
+            string? desc = analysis.EstProperties.Description;
+            return (!string.IsNullOrEmpty(name) &&
+                    name.Contains("PIPE", StringComparison.OrdinalIgnoreCase)) ||
+                   (!string.IsNullOrEmpty(desc) &&
+                    desc.Contains("PIPE", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool TryPickInnerCircle(
+            SmartDimHelper h,
+            IView view,
+            Edge[] profileCircles,
+            Edge outer,
+            double? expectedWall,
+            out Edge inner,
+            out double wall)
+        {
+            inner = null!;
+            wall = 0;
+            if (profileCircles.Length < 2)
+                return false;
+
+            double outerR = h.GetCircleRadius(outer);
+            double[] cOuter = h.GetCircleCenterOnSheet(outer, view);
+            double scale = Math.Max(view.ScaleDecimal, 1e-9);
+            double concentricTolSheet = Math.Max(outerR * scale * 0.20, 0.002);
+
+            Edge? best = null;
+            double bestErr = double.MaxValue;
+            double bestWall = 0;
+
+            foreach (Edge candidate in profileCircles.Skip(1))
+            {
+                double innerR = h.GetCircleRadius(candidate);
+                double w = outerR - innerR;
+                if (w < MinWallMeters || w > MaxWallMeters)
+                    continue;
+
+                // Same axis (concentric) — rejects unrelated arcs on the cut face.
+                double[] cInner = h.GetCircleCenterOnSheet(candidate, view);
+                double dx = cInner[0] - cOuter[0];
+                double dy = cInner[1] - cOuter[1];
+                if (Math.Sqrt(dx * dx + dy * dy) > concentricTolSheet)
+                    continue;
+
+                double err = expectedWall.HasValue
+                    ? Math.Abs(w - expectedWall.Value)
+                    : w;
+                if (err < bestErr)
                 {
-                    TryWallThickness(h, view, viewName, inner, outer, log);
-                    TryInnerDiameterInParentheses(h, view, viewName, inner, innerRadius * 2.0, log);
+                    bestErr = err;
+                    best = candidate;
+                    bestWall = w;
                 }
             }
+
+            if (best == null)
+                return false;
+
+            if (expectedWall.HasValue && bestErr > expectedWall.Value * 0.5 + 0.0005)
+                return false;
+
+            inner = best;
+            wall = bestWall;
+            return true;
         }
 
         private static void AddSideViewLength(
@@ -181,9 +295,9 @@ namespace SolidWorksTester.Cylindrical
             string viewName,
             Edge inner,
             Edge outer,
+            double wall,
             Action<string> log)
         {
-            double wall = h.GetCircleRadius(outer) - h.GetCircleRadius(inner);
             if (wall < MinSizeMeters)
                 return;
 
@@ -200,8 +314,7 @@ namespace SolidWorksTester.Cylindrical
                     return;
 
                 double[] center = h.GetCircleCenterOnSheet(outer, view);
-                // Main wall thickness at the bottom of the end-face view (below center).
-                DisplayDimension? dim = h.CreateDimension(
+                DisplayDimension? dim = h.CreateLinearDimension(
                     center[0] + DimOffset,
                     center[1] - DimOffset * 2.0);
                 if (dim != null)
@@ -245,8 +358,10 @@ namespace SolidWorksTester.Cylindrical
                     return;
 
                 double[] center = h.GetCircleCenterOnSheet(innerCircle, view);
-                // Inner diameter in parentheses, just below the wall thickness on the end-face view.
-                DisplayDimension? dim = h.CreateDimension(center[0], center[1] - DimOffset * 3.2);
+                DisplayDimension? dim = h.CreateDiameterDimension(
+                    innerCircle, view, center[0], center[1] - DimOffset * 3.2)
+                    ?? h.CreateDimension(center[0], center[1] - DimOffset * 3.2);
+
                 if (dim != null)
                 {
                     dim.ShowParenthesis = true;

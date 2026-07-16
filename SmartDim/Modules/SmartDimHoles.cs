@@ -13,23 +13,23 @@ namespace SolidWorksTester
     /// </summary>
     public static class SmartDimHoles
     {
-        public static void Add(SmartDimHelper h, IView view)
+        public static void Add(SmartDimHelper h, IView view, Action<string>? log = null)
         {
             if (!view.IsFlatPatternView()) return;
-            AddHoleDiameters(h, view);
+            AddHoleDiameters(h, view, null, log);
         }
 
         /// <summary>Hole diameters on standard orthographic views (flat plate pipeline).</summary>
-        public static void AddForStandardViews(SmartDimHelper h, IView view, double? excludeDiameter = null)
+        public static void AddForStandardViews(SmartDimHelper h, IView view, double? excludeDiameter = null, Action<string>? log = null)
         {
             if (view.IsFlatPatternView()) return;
-            AddHoleDiameters(h, view, excludeDiameter);
+            AddHoleDiameters(h, view, excludeDiameter, log);
         }
 
-        private static void AddHoleDiameters(SmartDimHelper h, IView view, double? excludeDiameter = null)
+        private static void AddHoleDiameters(SmartDimHelper h, IView view, double? excludeDiameter = null, Action<string>? log = null)
         {
             string viewName = view.GetName2();
-            Console.WriteLine($"  [Holes] Scanning for circular edges in: {viewName}");
+            log?.Invoke($"  [Holes] Scanning for circular edges in: {viewName}");
 
             Edge[] allEdges = h.GetViewEdges(view);
 
@@ -40,7 +40,7 @@ namespace SolidWorksTester
 
             if (circularEdges.Length == 0)
             {
-                Console.WriteLine($"  [Holes] No full-circle edges found");
+                log?.Invoke($"  [Holes] No full-circle edges found");
                 return;
             }
 
@@ -55,7 +55,7 @@ namespace SolidWorksTester
                 groups[diameter].Add(edge);
             }
 
-            Console.WriteLine($"  [Holes] Found {groups.Count} unique hole diameter groups");
+            log?.Invoke($"  [Holes] Found {groups.Count} unique hole diameter groups");
 
             // Get view bounding box for dimension placement
             var (minX, minY, maxX, maxY) = h.ComputeEdgesBoundingBox(allEdges, view);
@@ -68,7 +68,7 @@ namespace SolidWorksTester
                 if (excludeDiameter.HasValue &&
                     Math.Abs(diameter - excludeDiameter.Value) < 0.0001)
                 {
-                    Console.WriteLine($"  [Holes] Skipping outer profile Ø{diameter * 1000:F1}mm");
+                    log?.Invoke($"  [Holes] Skipping outer profile Ø{diameter * 1000:F1}mm");
                     continue;
                 }
 
@@ -76,7 +76,19 @@ namespace SolidWorksTester
                 if (h.DimensionedFeatures.Contains(key)) continue;
 
                 var group = kvp.Value;
-                int qty = group.Count;
+                // Through-holes expose top+bottom circles at the same sheet center —
+                // count unique centers, not raw edge count (avoids false "2x Ø").
+                const double centerBucket = 0.0005; // 0.5 mm
+                int qty = group
+                    .Select(e =>
+                    {
+                        double[] c = h.GetCircleCenterOnSheet(e, view);
+                        return (
+                            Math.Round(c[0] / centerBucket),
+                            Math.Round(c[1] / centerBucket));
+                    })
+                    .Distinct()
+                    .Count();
                 Edge representative = group[0];
 
                 // Select the first circle edge to create diameter dimension
@@ -91,17 +103,17 @@ namespace SolidWorksTester
                 DisplayDimension dim = h.CreateDimension(dimX, dimY);
                 if (dim != null)
                 {
-                    // Add quantity prefix if multiple holes of same size
+                    // Add quantity prefix if multiple distinct holes of same size
                     if (qty > 1)
                     {
                         dim.SetText((int)swDimensionTextParts_e.swDimensionTextPrefix, $"{qty}x ");
                     }
-                    Console.WriteLine($"  [Holes] ⌀{diameter * 1000:F1}mm × {qty} pcs — dimension created");
+                    log?.Invoke($"  [Holes] ⌀{diameter * 1000:F1}mm × {qty} pcs — dimension created");
                     h.DimensionedFeatures.Add(key);
                 }
                 else
                 {
-                    Console.WriteLine($"  [Holes] WARNING: Diameter dimension failed for ⌀{diameter * 1000:F1}mm");
+                    log?.Invoke($"  [Holes] WARNING: Diameter dimension failed for ⌀{diameter * 1000:F1}mm");
                 }
 
                 groupIndex++;

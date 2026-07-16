@@ -1,18 +1,21 @@
-using SolidWorks.Interop.sldworks;
+using SolidWorksTester.Services.Analysis.BafflePlate;
 using SolidWorksTester.Services.Analysis.FlangeGasket;
 
 namespace SolidWorksTester.Services.Analysis
 {
-    /// <summary>Resolves flat-plate sub-kind from part model analysis.</summary>
+    /// <summary>Resolves flat-plate sub-kind from a geometry snapshot (no extra COM).</summary>
     internal static class FlatPlateClassifier
     {
         public static FlatPlateSubKind Classify(
-            IModelDoc2 partDoc,
+            PartGeometrySnapshot snap,
             bool isRoundFlatDisc,
-            bool isRoundedEndFlatProfile,
-            bool hasHoles)
+            bool isRoundedEndFlatProfile)
         {
-            if (FlangeGasketModelAnalyzer.IsFlangeOrGasket(partDoc, hasHoles))
+            // Dense hole arrays first — otherwise flange bolt-circle heuristics misfire.
+            if (BafflePlateModelAnalyzer.IsBafflePlate(snap))
+                return FlatPlateSubKind.BafflePlate;
+
+            if (FlangeGasketModelAnalyzer.IsFlangeOrGasket(snap))
                 return FlatPlateSubKind.FlangeGasket;
 
             if (isRoundFlatDisc)
