@@ -33,6 +33,9 @@ namespace SolidWorksTester.Cylindrical
                     if (TryAddEndFaceCenterMarks(h, drawing, view, edges, viewName, log))
                         return;
 
+                    if (TryAddCutPipeCenterMarkOrLine(h, drawing, view, edges, viewName, log))
+                        return;
+
                     log($"  Warning: end-face center marks failed in {viewName}, trying centerline fallback.");
                 }
 
@@ -88,6 +91,78 @@ namespace SolidWorksTester.Cylindrical
                 log($"  Center marks added in {viewName} (end-face view).");
 
             return added;
+        }
+
+        /// <summary>
+        /// Cut/half pipes: center mark on outer arc, else centerline across the flat cut chord.
+        /// </summary>
+        private static bool TryAddCutPipeCenterMarkOrLine(
+            SmartDimHelper h,
+            IDrawingDoc drawing,
+            IView view,
+            Edge[] edges,
+            string viewName,
+            Action<string> log)
+        {
+            if (!CylindricalViewAnalyzer.IsCutPipeEndView(h, view, edges))
+                return false;
+
+            Edge[] profiles = CylindricalViewAnalyzer.GetEndFaceCircles(h, view, edges);
+            if (profiles.Length == 0)
+                return false;
+
+            Edge outer = profiles[0];
+            if (TryInsertCenterMark(h, drawing, view, outer) ||
+                h.TryInsertCenterMark(drawing, view, outer))
+            {
+                log($"  Center mark added in {viewName} (cut-pipe arc).");
+                return true;
+            }
+
+            double[] center = h.GetCircleCenterOnSheet(outer, view);
+            double rSheet = h.GetCircleRadius(outer) * Math.Max(view.ScaleDecimal, 1e-9);
+
+            Edge? chord = edges
+                .Where(h.IsLinear)
+                .Select(e =>
+                {
+                    double[] mid = h.GetEdgeMidpointOnSheet(e, view);
+                    double dx = mid[0] - center[0];
+                    double dy = mid[1] - center[1];
+                    return (E: e, Dist: Math.Sqrt(dx * dx + dy * dy), Len: h.GetProjectedLength(e, view));
+                })
+                .Where(x => x.Dist < rSheet * 0.35 && x.Len > rSheet * 0.70)
+                .OrderByDescending(x => x.Len)
+                .Select(x => x.E)
+                .FirstOrDefault();
+
+            if (chord == null || h.HasCenterLineInView(view))
+                return false;
+
+            // Parallel mate on the opposite side of the arc (for InsertCenterLine2 between two edges).
+            bool horiz = h.IsHorizontalInView(chord, view, 0.006);
+            double[] chordMid = h.GetEdgeMidpointOnSheet(chord, view);
+            Edge? mate = edges
+                .Where(h.IsLinear)
+                .Where(e => !ReferenceEquals(e, chord))
+                .Where(e => horiz
+                    ? h.IsHorizontalInView(e, view, 0.006)
+                    : h.IsVerticalInView(e, view, 0.006))
+                .OrderByDescending(e =>
+                {
+                    double[] m = h.GetEdgeMidpointOnSheet(e, view);
+                    return horiz ? Math.Abs(m[1] - chordMid[1]) : Math.Abs(m[0] - chordMid[0]);
+                })
+                .FirstOrDefault();
+
+            if (mate != null &&
+                CylindricalDimCenterlinesLegacy.TryInsertCenterlineBetweenEdges(h, drawing, view, chord, mate))
+            {
+                log($"  Centerline added in {viewName} (cut-pipe).");
+                return true;
+            }
+
+            return false;
         }
 
         private static bool TryInsertCenterMark(SmartDimHelper h, IDrawingDoc drawing, IView view, Edge circle)

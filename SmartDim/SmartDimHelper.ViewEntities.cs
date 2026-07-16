@@ -16,7 +16,7 @@ namespace SolidWorksTester
             if (comps == null || comps.Length == 0)
                 return null;
 
-            return (Component2)comps[0];
+            return comps[0] as Component2;
         }
 
         /// <summary>Returns visible model edges projected into the drawing view.</summary>

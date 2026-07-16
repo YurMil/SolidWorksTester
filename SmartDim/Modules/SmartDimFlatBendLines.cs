@@ -12,26 +12,26 @@ namespace SolidWorksTester
     /// </summary>
     public static class SmartDimFlatBendLines
     {
-        public static void Add(SmartDimHelper h, IView view)
+        public static void Add(SmartDimHelper h, IView view, Action<string>? log = null)
         {
             string viewName = view.GetName2();
-            Console.WriteLine($"  [FlatBend] Adding bend line dimensions to flat pattern: {viewName}");
+            log?.Invoke($"  [FlatBend] Adding bend line dimensions to flat pattern: {viewName}");
 
             if (!view.IsFlatPatternView())
             {
-                Console.WriteLine($"  [FlatBend] View is not a flat pattern — skipping");
+                log?.Invoke($"  [FlatBend] View is not a flat pattern — skipping");
                 return;
             }
 
             int bendLineCount = view.GetBendLineCount();
-            Console.WriteLine($"  [FlatBend] Found {bendLineCount} bend line(s)");
+            log?.Invoke($"  [FlatBend] Found {bendLineCount} bend line(s)");
 
             if (bendLineCount == 0) return;
 
-            object[] bendLines = (object[])view.GetBendLines();
+            object[]? bendLines = view.GetBendLines() as object[];
             if (bendLines == null || bendLines.Length == 0)
             {
-                Console.WriteLine($"  [FlatBend] GetBendLines() returned null or empty");
+                log?.Invoke($"  [FlatBend] GetBendLines() returned null or empty");
                 return;
             }
 
@@ -78,7 +78,7 @@ namespace SolidWorksTester
 
             if (leftBoundary == null || bottomBoundary == null || rightBoundary == null || topBoundary == null)
             {
-                Console.WriteLine($"  [FlatBend] WARNING: Missing one or more boundary edges");
+                log?.Invoke($"  [FlatBend] WARNING: Missing one or more boundary edges");
                 return;
             }
 
@@ -169,16 +169,16 @@ namespace SolidWorksTester
                     {
                         dimCount++;
                         dimensionedPositions.Add(posKey);
-                        Console.WriteLine($"  [FlatBend] Bend line {dimCount} dimension created (Horiz={isHoriz})");
+                        log?.Invoke($"  [FlatBend] Bend line {dimCount} dimension created (Horiz={isHoriz})");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"  [FlatBend] WARNING: Failed to dimension bend line: {ex.Message}");
+                    log?.Invoke($"  [FlatBend] WARNING: Failed to dimension bend line: {ex.Message}");
                 }
             }
 
-            Console.WriteLine($"  [FlatBend] Total bend line dimensions created: {dimCount}");
+            log?.Invoke($"  [FlatBend] Total bend line dimensions created: {dimCount}");
             h.ClearSelection();
         }
     }

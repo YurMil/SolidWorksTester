@@ -42,21 +42,23 @@ namespace SolidWorksTester.Services.Drawing
             log("Creating standard views (front, top, right)...");
             IModelDocExtension modelDocExt = model.Extension;
 
+            var layout = GetSheetLayout(drawing);
+
             IView? frontView = drawing.CreateDrawViewFromModelView3(
-                partPath, "*Front", DrawingViewLayout.FrontX, DrawingViewLayout.FrontY, 0.0);
+                partPath, "*Front", layout.FrontX, layout.FrontY, 0.0);
             if (frontView == null)
                 throw new InvalidOperationException("Failed to create front view.");
 
             frontView.SetName2("Drawing View1");
             string frontName = frontView.GetName2();
             frontView.UseSheetScale = 1;
-            log("  Front view created.");
+            log($"  Front view created at ({layout.FrontX:F3}, {layout.FrontY:F3}).");
 
             model.ClearSelection2(true);
             if (!modelDocExt.SelectByID2(frontName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
                 throw new InvalidOperationException($"Failed to select front view '{frontName}'.");
             IView? topView = drawing.CreateUnfoldedViewAt3(
-                DrawingViewLayout.TopX, DrawingViewLayout.TopY, 0.0, false);
+                layout.TopX, layout.TopY, 0.0, false);
             if (topView != null)
             {
                 topView.SetName2("Drawing View2");
@@ -68,7 +70,7 @@ namespace SolidWorksTester.Services.Drawing
             if (!modelDocExt.SelectByID2(frontName, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
                 throw new InvalidOperationException($"Failed to select front view '{frontName}'.");
             IView? rightView = drawing.CreateUnfoldedViewAt3(
-                DrawingViewLayout.RightX, DrawingViewLayout.RightY, 0.0, false);
+                layout.RightX, layout.RightY, 0.0, false);
             if (rightView != null)
             {
                 rightView.SetName2("Drawing View3");
@@ -79,6 +81,15 @@ namespace SolidWorksTester.Services.Drawing
             model.ForceRebuild3(true);
         }
 
+        private static DrawingViewLayout.SheetLayout GetSheetLayout(IDrawingDoc drawing)
+        {
+            ISheet? sheet = drawing.GetCurrentSheet() as ISheet;
+            if (sheet?.GetProperties2() is double[] props && props.Length >= 7)
+                return DrawingViewLayout.ForSheet(props[5], props[6]);
+
+            return DrawingViewLayout.ForSheet(0.420, 0.297);
+        }
+
         public static void CreateIsometricView(
             IModelDoc2 model,
             IDrawingDoc drawing,
@@ -86,11 +97,22 @@ namespace SolidWorksTester.Services.Drawing
             Action<string> log)
         {
             log("Creating isometric view...");
+
+            // Seed only — final position comes from SheetLayoutNormalizer (top-right work area).
+            double x = DrawingViewLayout.IsometricX;
+            double y = DrawingViewLayout.IsometricY;
+            ISheet? sheet = drawing.GetCurrentSheet() as ISheet;
+            if (sheet?.GetProperties2() is double[] props && props.Length >= 7)
+            {
+                x = props[5] * 0.78;
+                y = props[6] * 0.78;
+            }
+
             IView? isoView = drawing.CreateDrawViewFromModelView3(
                 partPath,
                 "*Isometric",
-                DrawingViewLayout.IsometricX,
-                DrawingViewLayout.IsometricY,
+                x,
+                y,
                 0.0);
 
             if (isoView == null)
@@ -101,7 +123,7 @@ namespace SolidWorksTester.Services.Drawing
 
             isoView.SetName2(SmartDim.SmartDimConstants.IsometricViewName);
             isoView.UseSheetScale = 1;
-            log("  Isometric view created.");
+            log($"  Isometric view created (seed {x:F3}, {y:F3}; final pack later).");
             model.ForceRebuild3(true);
         }
 
@@ -134,81 +156,12 @@ namespace SolidWorksTester.Services.Drawing
             model.ClearSelection2(true);
         }
 
-        public static void AdjustSheetScaleIfNeeded(IModelDoc2 model, IDrawingDoc drawing, Action<string> log)
-        {
-            ISheet? sheet = drawing.GetCurrentSheet() as ISheet;
-            if (sheet == null)
-                return;
-
-            double[] sheetProps = (double[])sheet.GetProperties2();
-            string sheetName = sheet.GetName();
-            double sheetWidth = sheetProps[5];
-            double sheetHeight = sheetProps[6];
-            const double margin = 0.02;
-
-            double availableWidth = sheetWidth - (margin * 2.0);
-            double availableHeight = sheetHeight - (margin * 2.0);
-
-            double minX = double.MaxValue;
-            double maxX = double.MinValue;
-            double minY = double.MaxValue;
-            double maxY = double.MinValue;
-
-            IView? currentView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
-            int viewCount = 0;
-
-            while (currentView != null)
-            {
-                // Sheet scale steps only affect views that follow the sheet scale.
-                currentView.UseSheetScale = 1;
-
-                double[]? viewOutline = currentView.GetOutline() as double[];
-                if (viewOutline != null)
-                {
-                    minX = Math.Min(minX, viewOutline[0]);
-                    minY = Math.Min(minY, viewOutline[1]);
-                    maxX = Math.Max(maxX, viewOutline[2]);
-                    maxY = Math.Max(maxY, viewOutline[3]);
-                    viewCount++;
-                }
-
-                currentView = currentView.GetNextView() as IView;
-            }
-
-            if (viewCount == 0)
-                return;
-
-            double occupiedWidth = maxX - minX;
-            double occupiedHeight = maxY - minY;
-            double scaleFactorX = availableWidth / occupiedWidth;
-            double scaleFactorY = availableHeight / occupiedHeight;
-            double finalScaleFactor = Math.Min(scaleFactorX, scaleFactorY);
-
-            if (finalScaleFactor >= 1.0)
-            {
-                log("  Sheet scale: no change needed.");
-                return;
-            }
-
-            double currentDenominator = sheetProps[3];
-            double newDenominator = Math.Ceiling(currentDenominator / finalScaleFactor);
-            log($"  Auto sheet scale: 1:{newDenominator}");
-
-            string slddrtPath = sheet.GetTemplateName();
-            drawing.SetupSheet6(
-                sheetName,
-                (int)sheetProps[0],
-                (int)sheetProps[1],
-                (int)sheetProps[2],
-                (int)newDenominator,
-                sheetProps[4] == 1,
-                slddrtPath,
-                sheetWidth,
-                sheetHeight,
-                "Default",
-                false,
-                0, 0, 0, 0, 0, 0);
-        }
+        /// <summary>
+        /// Legacy name — delegates to <see cref="SheetLayoutNormalizer.Arrange"/>
+        /// (outline-based pack + standard 1:N scale steps).
+        /// </summary>
+        public static void AdjustSheetScaleIfNeeded(IModelDoc2 model, IDrawingDoc drawing, Action<string> log) =>
+            SheetLayoutNormalizer.Arrange(model, drawing, log);
 
         public static void ValidateEstDrawingQuality(
             IDrawingDoc drawing,
@@ -220,6 +173,19 @@ namespace SolidWorksTester.Services.Drawing
 
             log("Checking EST dimension quality...");
             EstDrawingQualityValidator.ValidateAndLog(analysis, drawing, log);
+        }
+
+        /// <summary>Validate using a pre-collected sample list (no extra annotation COM walk).</summary>
+        public static void ValidateEstDrawingQuality(
+            PartAnalysisResult analysis,
+            IReadOnlyList<DrawingDimensionSample> drawingDimensions,
+            Action<string> log)
+        {
+            if (!analysis.EstProperties.HasAnyDimension)
+                return;
+
+            log("Checking EST dimension quality...");
+            EstDrawingQualityValidator.ValidateAndLog(analysis, drawingDimensions, log);
         }
     }
 }

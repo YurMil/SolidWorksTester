@@ -8,7 +8,7 @@ Each module is a static class with `Add(...)` or view-specific entry points. All
 
 ## Module A — `SmartDimOverall`
 
-**File:** `SmartDimOverall.cs`
+**File:** `SmartDim/Modules/SmartDimOverall.cs`
 
 Overall width and height of the part silhouette in each orthographic view. Uses extreme edges visible in the view.
 
@@ -16,7 +16,7 @@ Overall width and height of the part silhouette in each orthographic view. Uses 
 
 ## Module B — `SmartDimThickness`
 
-**File:** `SmartDimThickness.cs`
+**File:** `SmartDim/Modules/SmartDimThickness.cs`
 
 Sheet gauge/thickness:
 
@@ -30,7 +30,7 @@ Round plates use `RoundFlatPlateThickness` instead when in round mode.
 
 ## Module C — `SmartDimHoles`
 
-**File:** `SmartDimHoles.cs`
+**File:** `SmartDim/Modules/SmartDimHoles.cs`
 
 Radial dimensions on circular edges (holes). Supports `excludeDiameter` to skip the outer profile circle on round plates.
 
@@ -40,7 +40,7 @@ Entry: `AddForStandardViews(helper, view)` in flat pipeline.
 
 ## Module D — `SmartDimHolePositions`
 
-**File:** `SmartDimHolePositions.cs`
+**File:** `SmartDim/Modules/SmartDimHolePositions.cs`
 
 Linear dimensions locating hole centers relative to edges or origin geometry.
 
@@ -48,7 +48,7 @@ Linear dimensions locating hole centers relative to edges or origin geometry.
 
 ## Module E — `SmartDimCutouts`
 
-**File:** `SmartDimCutouts.cs`
+**File:** `SmartDim/Modules/SmartDimCutouts.cs`
 
 Dimensions for cutouts, slots, and non-circular openings visible in the view.
 
@@ -56,7 +56,7 @@ Dimensions for cutouts, slots, and non-circular openings visible in the view.
 
 ## Module F — `SmartDimBends`
 
-**File:** `SmartDimBends.cs`
+**File:** `SmartDim/Modules/SmartDimBends.cs`
 
 **Pipeline:** P-02 orthographic views only.
 
@@ -66,7 +66,7 @@ Bend-related annotations where bend lines/edges are visible in standard views.
 
 ## Module G — `SmartDimFlatBendLines`
 
-**File:** `SmartDimFlatBendLines.cs`
+**File:** `SmartDim/Modules/SmartDimFlatBendLines.cs`
 
 **Pipeline:** P-02 flat pattern view (`Drawing View4`) only.
 

@@ -19,17 +19,29 @@ namespace SolidWorksTester.FlangeGasket
             PartAnalysisResult? analysis,
             Action<string> log)
         {
-            log("  Step 1: import model dimensions to all views...");
-            DrawingModelDimensionImport.ImportMarkedDimensionsToAllViews(model, drawing, log);
+            using var timer = new PipelineStopwatch(log, "flange/gasket dimensions");
 
-            log("  Step 2: dedupe after model import...");
-            DrawingDimensionDeduper.RemoveDuplicateDimensions(
-                model, drawing, log, SmartDimConstants.IsometricViewName);
+            timer.Measure("Step 1: import marked dims", () =>
+            {
+                log("  Step 1: import model dimensions to all views...");
+                DrawingModelDimensionImport.ImportMarkedDimensionsToAllViews(model, drawing, log);
+            });
 
-            log("  Step 2b: upgrade imported hole dims to quantity callouts...");
-            FlangeGasketImportedDimUpgrader.UpgradeDiscFaceDimensions(
-                dimHelper, model, discFaceView, log);
+            timer.Measure("Step 2: dedupe after import", () =>
+            {
+                log("  Step 2: dedupe after model import...");
+                DrawingDimensionDeduper.RemoveDuplicateDimensions(
+                    model, drawing, log, SmartDimConstants.IsometricViewName);
+            });
 
+            timer.Measure("Step 2b: upgrade hole qty callouts", () =>
+            {
+                log("  Step 2b: upgrade imported hole dims to quantity callouts...");
+                FlangeGasketImportedDimUpgrader.UpgradeDiscFaceDimensions(
+                    dimHelper, model, discFaceView, log);
+            });
+
+            timer.Step("Step 3: smart dimensions");
             log("  Step 3: smart dimensions (missing only)...");
             IView? dimView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
             while (dimView != null)
@@ -41,27 +53,41 @@ namespace SolidWorksTester.FlangeGasket
                     continue;
                 }
 
-                log($"  Dimensions: {vName}");
-                FlangeGasketDimensions.AddForView(
-                    dimHelper, model, drawing, dimView, discFaceView, log);
+                PipelineStopwatch.Run(log, $"FlangeGasketDimensions: {vName}", () =>
+                {
+                    log($"  Dimensions: {vName}");
+                    FlangeGasketDimensions.AddForView(
+                        dimHelper, model, drawing, dimView, discFaceView, log);
+                });
                 dimView = dimView.GetNextView() as IView;
             }
 
+            timer.FinishStep();
+
             double? expectedThicknessMm = ResolveExpectedThicknessMm(analysis);
-            log("  Step 4: profile thickness and step depths (gabarit)...");
-            FlangeGasketProfileDimensions.TryAddOnce(
-                dimHelper, model, drawing, discFaceView, expectedThicknessMm, log);
+            timer.Measure("Step 4: profile thickness/gabarit", () =>
+            {
+                log("  Step 4: profile thickness and step depths (gabarit)...");
+                FlangeGasketProfileDimensions.TryAddOnce(
+                    dimHelper, model, drawing, discFaceView, expectedThicknessMm, log);
+            });
 
-            log("  Step 5: dedupe after smart dimensions...");
-            DrawingDimensionDeduper.RemoveDuplicateDimensions(
-                model, drawing, log, SmartDimConstants.IsometricViewName);
-            // Prefer "24x Ø" over bare Ø when both exist (side-view imports).
-            DrawingDimensionDeduper.RemoveQuantityPrefixedDiameterDuplicates(
-                model, drawing, log, preferQuantityPrefix: true, SmartDimConstants.IsometricViewName);
+            timer.Measure("Step 5: dedupe after smart dims", () =>
+            {
+                log("  Step 5: dedupe after smart dimensions...");
+                DrawingDimensionDeduper.RemoveDuplicateDimensions(
+                    model, drawing, log, SmartDimConstants.IsometricViewName);
+                // Prefer "24x Ø" over bare Ø when both exist (side-view imports).
+                DrawingDimensionDeduper.RemoveQuantityPrefixedDiameterDuplicates(
+                    model, drawing, log, preferQuantityPrefix: true, SmartDimConstants.IsometricViewName);
+            });
 
-            log("  Step 6: ensure hole quantity callouts...");
-            FlangeGasketImportedDimUpgrader.EnsureHoleQuantityCallouts(
-                dimHelper, model, discFaceView, log);
+            timer.Measure("Step 6: ensure hole qty callouts", () =>
+            {
+                log("  Step 6: ensure hole quantity callouts...");
+                FlangeGasketImportedDimUpgrader.EnsureHoleQuantityCallouts(
+                    dimHelper, model, discFaceView, log);
+            });
         }
 
         private static double? ResolveExpectedThicknessMm(PartAnalysisResult? analysis)

@@ -19,18 +19,19 @@ namespace SolidWorksTester.RoundFlatPlate
 
             if (outerCircle != null)
             {
+                // Face-on disc: OD + center marks; holes exclude outer profile.
                 CylindricalDimCenterlines.Add(h, model, drawing, view, log);
 
                 double outerDiameter = h.GetCircleRadius(outerCircle) * 2.0;
                 TryOuterDiameter(h, view, viewName, outerCircle, outerDiameter, log);
 
-                SmartDimHoles.AddForStandardViews(h, view, excludeDiameter: outerDiameter);
+                SmartDimHoles.AddForStandardViews(h, view, excludeDiameter: outerDiameter, log: log);
                 return;
             }
 
-            SmartDimHoles.AddForStandardViews(h, view);
-            SmartDimHolePositions.Add(h, view);
-            SmartDimCutouts.Add(h, view);
+            // Side / edge-on views: top+bottom rim circles share OD — never treat as "2x Ø" holes.
+            // Thickness is placed once later via RoundFlatPlateThickness.TryAddOnce.
+            log($"  [{viewName}] Round-plate side view — skip hole scan (rim circles ≠ holes).");
         }
 
         /// <summary>Called once after all views — thickness belongs on the best side view only.</summary>

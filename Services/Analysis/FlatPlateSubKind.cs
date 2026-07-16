@@ -7,6 +7,8 @@ namespace SolidWorksTester.Services.Analysis
         Generic,
         RoundDisc,
         RoundedEnd,
-        FlangeGasket
+        FlangeGasket,
+        /// <summary>Sheet-metal baffle / tube-sheet style plate with a dense hole array.</summary>
+        BafflePlate
     }
 }

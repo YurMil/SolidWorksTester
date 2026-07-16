@@ -69,7 +69,7 @@ namespace SolidWorksTester.Imported
             if (role == ImportedViewRole.LengthPrimary || role == ImportedViewRole.LengthSecondary)
             {
                 log($"  [{viewName}] Length view — overall + centerline.");
-                SmartDimOverall.Add(h, view);
+                SmartDimOverall.Add(h, view, log);
                 CylindricalDimCenterlines.Add(h, model, drawing, view, log);
                 ImportedDimGeometry.AddForImportedView(h, drawing, view, isPrimaryView: false, log);
                 return;
@@ -96,7 +96,7 @@ namespace SolidWorksTester.Imported
             {
                 log($"  [{viewName}] Tube end view — OD / wall + center marks.");
                 CylindricalDimCenterlines.Add(h, model, drawing, view, log);
-                CylindricalDimSizes.Add(h, view, analysis.IsHollow, log);
+                CylindricalDimSizes.Add(h, view, analysis, log);
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace SolidWorksTester.Imported
             {
                 log($"  [{viewName}] Tube side view — length + centerline.");
                 CylindricalDimCenterlines.Add(h, model, drawing, view, log);
-                CylindricalDimSizes.Add(h, view, analysis.IsHollow, log);
+                CylindricalDimSizes.Add(h, view, analysis, log);
             }
         }
 

@@ -89,6 +89,7 @@ namespace SolidWorksTester.Services.Drawing.Routing
             PartModelKind.BentSheetMetal => DrawingPipelineId.BentSheetMetal,
             PartModelKind.Cylindrical => DrawingPipelineId.Cylindrical,
             PartModelKind.ImportedGeometry => DrawingPipelineId.ImportedGeometry,
+            PartModelKind.LoftedBends => DrawingPipelineId.LoftedBends,
             _ => DrawingPipelineId.GenericFallback
         };
 
@@ -106,6 +107,10 @@ namespace SolidWorksTester.Services.Drawing.Routing
             if (analysis.FlatPlateSubKind == FlatPlateSubKind.Generic &&
                 analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.FlangeGasket)
                 return FlatPlateSubKind.FlangeGasket;
+
+            if (analysis.FlatPlateSubKind == FlatPlateSubKind.Generic &&
+                analysis.GeometryFlatPlateSubKind == FlatPlateSubKind.BafflePlate)
+                return FlatPlateSubKind.BafflePlate;
 
             return analysis.FlatPlateSubKind;
         }

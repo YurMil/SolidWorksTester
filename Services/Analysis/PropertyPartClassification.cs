@@ -78,7 +78,20 @@ namespace SolidWorksTester.Services.Analysis
             if (string.IsNullOrWhiteSpace(drawingProfile) && estNameMatch != null)
                 drawingProfile = estNameMatch.CatalogId;
 
-            if (EstPartPropertiesParser.DescriptionIndicatesFlangeOrGasket(est.Description))
+            // Baffle before flange: Description "BAFFLE PLATE…" must not become FlangeGasket.
+            if (EstPartPropertiesParser.DescriptionIndicatesBafflePlate(est.Description))
+            {
+                hasPartKind = true;
+                partKind = PartModelKind.FlatPlate;
+                hasSubKind = true;
+                subKind = FlatPlateSubKind.BafflePlate;
+                if (origin == PropertyClassificationOrigin.None)
+                    origin = PropertyClassificationOrigin.EstConfigurationName;
+                if (string.IsNullOrWhiteSpace(drawingProfile) ||
+                    drawingProfile.Equals("plate", StringComparison.OrdinalIgnoreCase))
+                    drawingProfile = "baffle_plate";
+            }
+            else if (EstPartPropertiesParser.DescriptionIndicatesFlangeOrGasket(est.Description))
             {
                 hasPartKind = true;
                 partKind = PartModelKind.FlatPlate;
@@ -140,6 +153,18 @@ namespace SolidWorksTester.Services.Analysis
                 {
                     p.IsTrusted = false;
                     p.TrustFailureReason = "Property FlatPlate conflicts with cylindrical geometry.";
+                });
+            }
+
+            if (declared == PartModelKind.Cylindrical &&
+                geometry.HasLoftedBendFeature &&
+                geometry.HasSheetMetalFeature)
+            {
+                return Clone(property, p =>
+                {
+                    p.IsTrusted = false;
+                    p.TrustFailureReason =
+                        "Property Cylindrical/SHELL but model has Lofted Bends — use unfold pipeline.";
                 });
             }
 
@@ -235,6 +260,7 @@ namespace SolidWorksTester.Services.Analysis
             return raw.ToUpperInvariant() switch
             {
                 "BENT" or "BENT_SHEET_METAL" or "SHEET_METAL_BENT" => Assign(PartModelKind.BentSheetMetal, out kind),
+                "LOFTED" or "LOFTED_BENDS" or "SHELL_LOFTED" => Assign(PartModelKind.LoftedBends, out kind),
                 "FLAT" or "FLAT_PLATE" or "SHEET_METAL_FLAT" => Assign(PartModelKind.FlatPlate, out kind),
                 "CYLINDER" or "CYLINDRICAL" or "TUBE" or "PIPE" => Assign(PartModelKind.Cylindrical, out kind),
                 "IMPORT" or "IMPORTED" or "IMPORTED_GEOMETRY" or "STEP" => Assign(PartModelKind.ImportedGeometry, out kind),
@@ -259,6 +285,8 @@ namespace SolidWorksTester.Services.Analysis
                 "DISC" or "ROUND" or "ROUND_DISC" => Assign(FlatPlateSubKind.RoundDisc, out subKind),
                 "ROUNDED" or "ROUNDED_END" => Assign(FlatPlateSubKind.RoundedEnd, out subKind),
                 "FLANGE" or "GASKET" or "FLANGE_GASKET" => Assign(FlatPlateSubKind.FlangeGasket, out subKind),
+                "BAFFLE" or "BAFFLE_PLATE" or "PERFORATED" or "TUBE_SHEET" or "TUBESHEET"
+                    => Assign(FlatPlateSubKind.BafflePlate, out subKind),
                 "GENERIC" or "PLATE" => Assign(FlatPlateSubKind.Generic, out subKind),
                 _ => false
             };

@@ -36,8 +36,13 @@ namespace SolidWorksTester.Services
             {
                 Guid clsid = SldWorksGuid;
                 GetActiveObject(ref clsid, IntPtr.Zero, out object swAppObj);
-                swApp = (ISldWorks)swAppObj;
+                swApp = swAppObj as ISldWorks
+                    ?? throw new InvalidCastException("ROT object is not ISldWorks.");
                 Write("Connected to running SOLIDWORKS.");
+            }
+            catch (InvalidCastException)
+            {
+                throw;
             }
             catch
             {
@@ -51,7 +56,10 @@ namespace SolidWorksTester.Services
                 Type? swType = Type.GetTypeFromProgID("SldWorks.Application")
                     ?? throw new InvalidOperationException("COM type SldWorks.Application is not registered.");
 
-                swApp = (ISldWorks)Activator.CreateInstance(swType)!;
+                object created = Activator.CreateInstance(swType)
+                    ?? throw new InvalidOperationException("Failed to create SldWorks.Application.");
+                swApp = created as ISldWorks
+                    ?? throw new InvalidCastException("Created COM object is not ISldWorks.");
                 swApp.Visible = true;
                 isNewInstance = true;
                 Write("New SOLIDWORKS instance started.");
@@ -83,9 +91,37 @@ namespace SolidWorksTester.Services
                 return current!;
 
             if (current != null)
+            {
                 log?.Invoke("SOLIDWORKS COM connection lost — reconnecting...");
+                ComObjectRelease.Release(current);
+            }
 
             return Connect(log).App;
+        }
+
+        /// <summary>
+        /// Drops our ISldWorks RCW after a batch. Does not call ExitApp — SOLIDWORKS stays open
+        /// for the user to inspect drawings (whether we attached or started it).
+        /// </summary>
+        public static void ReleaseApp(ref ISldWorks? app, Action<string>? log = null)
+        {
+            if (app == null)
+                return;
+
+            try
+            {
+                ComObjectRelease.Release(app);
+                log?.Invoke("Released SOLIDWORKS COM reference (RCW).");
+            }
+            catch (Exception ex)
+            {
+                log?.Invoke($"Warning: COM release failed: {ex.Message}");
+            }
+            finally
+            {
+                app = null;
+                ComObjectRelease.CollectRcws();
+            }
         }
 
         private static void WaitForSolidWorksReady(ISldWorks swApp, Action<string> write)

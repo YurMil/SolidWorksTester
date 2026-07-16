@@ -65,13 +65,23 @@ namespace SolidWorksTester
 
         // ── Shared internals (partial files) ─────────────────────────────
 
-        private void ActivateView(IView view) => Drawing.ActivateView(view.GetName2());
+        /// <summary>Activates a drawing view for subsequent selections.</summary>
+        public void ActivateView(IView view) => Drawing.ActivateView(view.GetName2());
 
         private SelectData CreateViewSelectData(IView view)
         {
-            SelectionMgr selMgr = (SelectionMgr)Model.SelectionManager;
-            SelectData selData = (SelectData)selMgr.CreateSelectData();
-            selData.View = (SolidWorks.Interop.sldworks.View)view;
+            // Prefer interface types; SelectData.View still needs the View coclass (SW interop quirk).
+            ISelectionMgr selMgr = Model.SelectionManager as ISelectionMgr
+                ?? throw new InvalidOperationException("Model.SelectionManager is not ISelectionMgr.");
+
+            SelectData selData = selMgr.CreateSelectData() as SelectData
+                ?? throw new InvalidOperationException("CreateSelectData returned null.");
+
+            SolidWorks.Interop.sldworks.View? viewCoclass = view as SolidWorks.Interop.sldworks.View;
+            if (viewCoclass == null)
+                throw new InvalidOperationException("IView could not be cast to View for SelectData.");
+
+            selData.View = viewCoclass;
             return selData;
         }
 

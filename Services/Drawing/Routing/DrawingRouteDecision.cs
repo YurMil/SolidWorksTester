@@ -21,6 +21,7 @@ namespace SolidWorksTester.Services.Drawing.Routing
             DrawingPipelineId.BentSheetMetal => "P-02 BentSheetMetal",
             DrawingPipelineId.Cylindrical => "P-03 Cylindrical",
             DrawingPipelineId.ImportedGeometry => "P-04 ImportedGeometry",
+            DrawingPipelineId.LoftedBends => "P-05 LoftedBends",
             DrawingPipelineId.GenericFallback => "P-00 GenericFallback",
             _ => PipelineId.ToString()
         };

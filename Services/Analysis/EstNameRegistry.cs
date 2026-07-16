@@ -40,9 +40,11 @@ namespace SolidWorksTester.Services.Analysis
                 n => n == "DISHED END DIN28013"),
             new Rule("dished_end_ss895", PartModelKind.Cylindrical, FlatPlateSubKind.Unknown, false,
                 n => n == "DISHED END SS895"),
+            new Rule("baffle_plate", PartModelKind.FlatPlate, FlatPlateSubKind.BafflePlate, true,
+                n => n == "BAFFLE PLATE" || n == "BAFFLE"),
             new Rule("plate_round", PartModelKind.FlatPlate, FlatPlateSubKind.RoundDisc, true,
                 n => n == "PLATE ROUND"),
-            new Rule("shell_with_cutting", PartModelKind.Cylindrical, FlatPlateSubKind.Unknown, false,
+            new Rule("shell_with_cutting", PartModelKind.LoftedBends, FlatPlateSubKind.Unknown, true,
                 n => n == "SHELL WITH CUTTING"),
             new Rule("repad_round_dished_end", PartModelKind.FlatPlate, FlatPlateSubKind.RoundDisc, false,
                 n => n == "RE-PAD ROUND DISHED END"),
@@ -54,7 +56,7 @@ namespace SolidWorksTester.Services.Analysis
                 n => n == "BENDED PLATE"),
             new Rule("insulation_ring", PartModelKind.FlatPlate, FlatPlateSubKind.RoundDisc, false,
                 n => n == "INSULATION RING"),
-            new Rule("insulation_shell", PartModelKind.Cylindrical, FlatPlateSubKind.Unknown, false,
+            new Rule("insulation_shell", PartModelKind.LoftedBends, FlatPlateSubKind.Unknown, true,
                 n => n == "INSULATION SHELL"),
             new Rule("stiffening_ring_section", PartModelKind.FlatPlate, FlatPlateSubKind.Generic, false,
                 n => n == "STIFFENING RING SECTION"),
@@ -74,7 +76,7 @@ namespace SolidWorksTester.Services.Analysis
                 n => n == "PLATE"),
             new Rule("gasket", PartModelKind.FlatPlate, FlatPlateSubKind.FlangeGasket, true,
                 n => n == "GASKET"),
-            new Rule("shell", PartModelKind.Cylindrical, FlatPlateSubKind.Unknown, false,
+            new Rule("shell", PartModelKind.LoftedBends, FlatPlateSubKind.Unknown, true,
                 n => n == "SHELL"),
             new Rule("cone", PartModelKind.Cylindrical, FlatPlateSubKind.Unknown, false,
                 n => n == "CONE"),
@@ -100,6 +102,10 @@ namespace SolidWorksTester.Services.Analysis
             new Rule("rhs", PartModelKind.ImportedGeometry, FlatPlateSubKind.Unknown, false, n => n == "RHS"),
 
             // ── Contains fallbacks (less specific) ──
+            new Rule("baffle_plate_fuzzy", PartModelKind.FlatPlate, FlatPlateSubKind.BafflePlate, true,
+                n => n.Contains("BAFFLE", StringComparison.Ordinal) ||
+                     n.Contains("TUBE SHEET", StringComparison.Ordinal) ||
+                     n.Contains("TUBESHEET", StringComparison.Ordinal)),
             new Rule("elbow", PartModelKind.BentSheetMetal, FlatPlateSubKind.Unknown, false,
                 n => n.Contains("ELBOW", StringComparison.Ordinal)),
             new Rule("dished_end", PartModelKind.Cylindrical, FlatPlateSubKind.Unknown, false,

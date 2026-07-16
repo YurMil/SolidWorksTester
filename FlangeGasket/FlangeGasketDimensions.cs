@@ -377,6 +377,19 @@ namespace SolidWorksTester.FlangeGasket
             return dim;
         }
 
+        private static void ExitSketchIfNeeded(IModelDoc2 model)
+        {
+            try
+            {
+                if (model.GetActiveSketch() != null)
+                    model.SketchManager.InsertSketch(true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
         /// <summary>
         /// Temporary construction rays from disc center to two adjacent hole centers,
         /// then angular dim on the minor arc between those rays.
@@ -413,14 +426,14 @@ namespace SolidWorksTester.FlangeGasket
                 var ray2 = model.SketchManager.CreateLine(c[0], c[1], c[2], b[0], b[1], b[2]) as SketchSegment;
                 if (ray1 == null || ray2 == null)
                 {
-                    model.SketchManager.InsertSketch(true);
+                    ExitSketchIfNeeded(model);
                     return null;
                 }
 
                 ray1.ConstructionGeometry = true;
                 ray2.ConstructionGeometry = true;
 
-                model.SketchManager.InsertSketch(true);
+                ExitSketchIfNeeded(model);
 
                 h.ClearSelection();
                 if (!h.SelectSketchSegment(ray1, view, false) ||
@@ -441,7 +454,7 @@ namespace SolidWorksTester.FlangeGasket
             }
             catch
             {
-                try { model.SketchManager.InsertSketch(true); } catch { /* ignore */ }
+                ExitSketchIfNeeded(model);
                 return null;
             }
             finally

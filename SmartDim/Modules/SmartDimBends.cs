@@ -19,10 +19,10 @@ namespace SolidWorksTester
             "SMMiteredFlange", "MiterFlange", "LoftedBend", "OneBend", "Fold"
         };
 
-        public static void Add(SmartDimHelper h, IView view)
+        public static void Add(SmartDimHelper h, IView view, Action<string>? log = null)
         {
             string viewName = view.GetName2();
-            Console.WriteLine($"  [Bends] Scanning for bend features in: {viewName}");
+            log?.Invoke($"  [Bends] Scanning for bend features in: {viewName}");
 
             Edge[] allEdges = h.GetViewEdges(view);
             if (allEdges.Length == 0) return;
@@ -47,11 +47,11 @@ namespace SolidWorksTester
 
             if (bendEdgeGroups.Count == 0)
             {
-                Console.WriteLine($"  [Bends] No bend features found");
+                log?.Invoke($"  [Bends] No bend features found");
                 return;
             }
 
-            Console.WriteLine($"  [Bends] Found {bendEdgeGroups.Count} bend feature(s)");
+            log?.Invoke($"  [Bends] Found {bendEdgeGroups.Count} bend feature(s)");
 
 
             foreach (var kvp in bendEdgeGroups)
@@ -81,7 +81,7 @@ namespace SolidWorksTester
                     h.SelectEdge(flangeEdge, view, false);
                     var dim = h.CreateDimension(midPt[0], midPt[1] - 0.008);
                     if (dim != null)
-                        Console.WriteLine($"  [Bends] {featName}: Flange length dimension created");
+                        log?.Invoke($"  [Bends] {featName}: Flange length dimension created");
                 }
 
                 // ── 2. Bend radius dimension (1 arc/circular edge) ──
@@ -94,7 +94,7 @@ namespace SolidWorksTester
                 h.SelectEdge(radiusEdge, view, false);
                 var dim2 = h.CreateDimension(center[0] + 0.008, center[1] + 0.008);
                 if (dim2 != null)
-                    Console.WriteLine($"  [Bends] {featName}: Bend radius R{radius * 1000:F2}mm dimension created");
+                    log?.Invoke($"  [Bends] {featName}: Bend radius R{radius * 1000:F2}mm dimension created");
             }
 
             h.ClearSelection();

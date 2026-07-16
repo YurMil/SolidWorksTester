@@ -12,10 +12,10 @@ namespace SolidWorksTester
     /// </summary>
     public static class SmartDimHolePositions
     {
-        public static void Add(SmartDimHelper h, IView view)
+        public static void Add(SmartDimHelper h, IView view, Action<string>? log = null)
         {
             string viewName = view.GetName2();
-            Console.WriteLine($"  [HolePos] Adding hole position dimensions to: {viewName}");
+            log?.Invoke($"  [HolePos] Adding hole position dimensions to: {viewName}");
 
             Edge[] allEdges = h.GetViewEdges(view);
 
@@ -37,7 +37,7 @@ namespace SolidWorksTester
 
             if (leftBoundary == null && bottomBoundary == null)
             {
-                Console.WriteLine($"  [HolePos] No boundary edges found for positioning");
+                log?.Invoke($"  [HolePos] No boundary edges found for positioning");
                 return;
             }
 
@@ -81,7 +81,7 @@ namespace SolidWorksTester
                     double dimY = minY - 0.008; // 8mm below the view
                     var dim = h.CreateDimension(dimX, dimY);
                     if (dim != null)
-                        Console.WriteLine($"  [HolePos] Horizontal position dimension created");
+                        log?.Invoke($"  [HolePos] Horizontal position dimension created");
                 }
 
                 // Find the hole center closest to the bottom boundary edge (smallest Y)
@@ -106,7 +106,7 @@ namespace SolidWorksTester
                     double dimY = (minY + holeCenter[1]) / 2.0;
                     var dim = h.CreateDimension(dimX, dimY);
                     if (dim != null)
-                        Console.WriteLine($"  [HolePos] Vertical position dimension created");
+                        log?.Invoke($"  [HolePos] Vertical position dimension created");
                 }
                 
                 h.DimensionedFeatures.Add(key);

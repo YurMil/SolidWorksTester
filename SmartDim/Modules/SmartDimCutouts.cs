@@ -12,10 +12,10 @@ namespace SolidWorksTester
     /// </summary>
     public static class SmartDimCutouts
     {
-        public static void Add(SmartDimHelper h, IView view)
+        public static void Add(SmartDimHelper h, IView view, Action<string>? log = null)
         {
             string viewName = view.GetName2();
-            Console.WriteLine($"  [Cutouts] Scanning for cutout features in: {viewName}");
+            log?.Invoke($"  [Cutouts] Scanning for cutout features in: {viewName}");
 
             Edge[] allEdges = h.GetViewEdges(view);
             var linearEdges = allEdges.Where(e => h.IsLinear(e)).ToArray();
@@ -47,11 +47,11 @@ namespace SolidWorksTester
 
             if (cutoutEdgeGroups.Count == 0)
             {
-                Console.WriteLine($"  [Cutouts] No cutout features found");
+                log?.Invoke($"  [Cutouts] No cutout features found");
                 return;
             }
 
-            Console.WriteLine($"  [Cutouts] Found {cutoutEdgeGroups.Count} cutout feature(s)");
+            log?.Invoke($"  [Cutouts] Found {cutoutEdgeGroups.Count} cutout feature(s)");
 
             foreach (var kvp in cutoutEdgeGroups)
             {
@@ -68,7 +68,7 @@ namespace SolidWorksTester
                 // If the cutout is viewed from the side (edge view), one of its dimensions will be the sheet thickness
                 if (cutWidth < 0.001 || cutHeight < 0.001) continue;
 
-                Console.WriteLine($"  [Cutouts] {featName}: {cutWidth * 1000:F1} x {cutHeight * 1000:F1} mm");
+                log?.Invoke($"  [Cutouts] {featName}: {cutWidth * 1000:F1} x {cutHeight * 1000:F1} mm");
 
                 // Find horizontal and vertical edges within this cutout for dimensioning
                 var horizEdges = edges.Where(e => h.IsHorizontalInView(e, view)).ToList();
@@ -92,7 +92,7 @@ namespace SolidWorksTester
                         h.SelectEdge(leftCutEdge, view, false);
                         h.SelectEdge(rightCutEdge, view, true);
                         var dim = h.CreateDimension((cMinX + cMaxX) / 2.0, cMinY - 0.006);
-                        if (dim != null) Console.WriteLine($"  [Cutouts] {featName} width dimension created");
+                        if (dim != null) log?.Invoke($"  [Cutouts] {featName} width dimension created");
                     }
                 }
 
@@ -114,7 +114,7 @@ namespace SolidWorksTester
                         h.SelectEdge(topCutEdge, view, false);
                         h.SelectEdge(bottomCutEdge, view, true);
                         var dim = h.CreateDimension(cMaxX + 0.008, (cMinY + cMaxY) / 2.0);
-                        if (dim != null) Console.WriteLine($"  [Cutouts] {featName} height dimension created");
+                        if (dim != null) log?.Invoke($"  [Cutouts] {featName} height dimension created");
                     }
                 }
 
@@ -138,7 +138,7 @@ namespace SolidWorksTester
                     h.SelectEdge(outerLeftEdge, view, false);
                     h.SelectEdge(nearestCutVertEdge, view, true);
                     var dim = h.CreateDimension((viewMinX + cMinX) / 2.0, viewMaxY + 0.006);
-                    if (dim != null) Console.WriteLine($"  [Cutouts] {featName} left offset dimension created");
+                    if (dim != null) log?.Invoke($"  [Cutouts] {featName} left offset dimension created");
                 }
 
                 // Position from bottom boundary to cutout
@@ -161,7 +161,7 @@ namespace SolidWorksTester
                     h.SelectEdge(outerBottomEdge, view, false);
                     h.SelectEdge(nearestCutHorizEdge, view, true);
                     var dim = h.CreateDimension(viewMaxX + 0.012, (viewMinY + cMinY) / 2.0);
-                    if (dim != null) Console.WriteLine($"  [Cutouts] {featName} bottom offset dimension created");
+                    if (dim != null) log?.Invoke($"  [Cutouts] {featName} bottom offset dimension created");
                 }
             }
 

@@ -253,7 +253,8 @@ namespace SolidWorksTester.Cylindrical
             return TryInsertCenterlineBetweenEdges(h, drawing, view, edgeA, edgeB);
         }
 
-        private static bool TryInsertCenterlineBetweenEdges(
+        /// <summary>Insert centerline between two selected edges (e.g. weld-gap faces).</summary>
+        internal static bool TryInsertCenterlineBetweenEdges(
             SmartDimHelper h,
             IDrawingDoc drawing,
             IView view,

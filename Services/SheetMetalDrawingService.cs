@@ -29,24 +29,31 @@ namespace SolidWorksTester.Services
             log($"Part: {partPath}");
             log($"Drawing: {drawingPath}");
 
-            PartAnalysisResult analysis = PartModelAnalyzer.Analyze(swApp, partPath, log);
+            using var partTimer = new PipelineStopwatch(log, "ProcessPart");
+
+            PartAnalysisResult analysis = partTimer.Measure("part analysis", () =>
+                PartModelAnalyzer.Analyze(swApp, partPath, log));
 
             string templateExt = Path.GetExtension(templatePath);
             if (templateExt.Equals(".DRWDOT", StringComparison.OrdinalIgnoreCase))
             {
                 log("Creating drawing from .DRWDOT template...");
-                IModelDoc2? model = swApp.NewDocument(templatePath, 0, 0, 0) as IModelDoc2;
+                IModelDoc2? model = partTimer.Measure("new drawing from DRWDOT", () =>
+                    swApp.NewDocument(templatePath, 0, 0, 0) as IModelDoc2);
                 if (model == null)
                     throw new InvalidOperationException("Failed to create drawing from .DRWDOT template.");
 
                 try
                 {
-                    ProcessDrawingModel(swApp, model, partPath, analysis, log);
-                    SaveDrawingToPath(model, drawingPath, log);
+                    partTimer.Measure("process drawing model", () =>
+                        ProcessDrawingModel(swApp, model, partPath, analysis, log));
+                    partTimer.Measure("save drawing", () =>
+                        SaveDrawingToPath(model, drawingPath, log));
                 }
                 finally
                 {
-                    SolidWorksConnection.SafeCloseDocument(swApp, model, log);
+                    partTimer.Measure("close drawing", () =>
+                        SolidWorksConnection.SafeCloseDocument(swApp, model, log));
                     // Part stays open through view creation; close after the drawing is finished.
                     SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log);
                 }
@@ -66,7 +73,8 @@ namespace SolidWorksTester.Services
                 throw new NotSupportedException("Supported templates: .DRWDOT and .SLDDRW.");
             }
 
-            OpenAndProcessDrawing(swApp, partPath, drawingPath, analysis, log);
+            partTimer.Measure("open and process drawing", () =>
+                OpenAndProcessDrawing(swApp, partPath, drawingPath, analysis, log));
         }
 
         private static void OpenAndProcessDrawing(

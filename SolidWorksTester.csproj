@@ -26,6 +26,31 @@
     <PackageReference Include="SolidWorks.Interop.swconst" Version="32.1.0" />
   </ItemGroup>
 
+  <!-- Drop WebView2.Wpf early — WinForms-only host; avoids MSB3277 WindowsBase conflict noise. -->
+  <Target Name="ExcludeWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="Microsoft.Web.WebView2.Wpf" />
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+  <Target Name="ExcludeWebView2WpfCopyLocal" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Allow unit tests to exercise internal routers/registries without SOLIDWORKS. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SolidWorksTester.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="SolidWorksTester.Tests\**" />
+    <None Remove="SolidWorksTester.Tests\**" />
+    <EmbeddedResource Remove="SolidWorksTester.Tests\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Docs\ReleaseNotes\v*.md" />
     <None Include="Docs\ReleaseNotes\**\*" CopyToOutputDirectory="PreserveNewest" />

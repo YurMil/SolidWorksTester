@@ -45,4 +45,7 @@ Flat-plate sub-routing remains in `FlatPlateSubKindResolver` + `FlatPlateDimRout
 2. If pipeline differs from default kind mapping, add row to `EstCatalogRouteTable`
 3. When dedicated dims are ready, set `DedicatedPipeline: true` in registry and implement modules
 
+Flat-plate nested sub-kinds: `Generic`, `RoundDisc`, `RoundedEnd`, `FlangeGasket`, `BafflePlate`
+(see [baffle-plate-pipeline.md](baffle-plate-pipeline.md)).
+
 See also: [pipelines-overview.md](pipelines-overview.md), [est-name-catalog.md](../analysis/est-name-catalog.md).

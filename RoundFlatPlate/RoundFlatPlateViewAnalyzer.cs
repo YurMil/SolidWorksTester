@@ -11,7 +11,11 @@ namespace SolidWorksTester.RoundFlatPlate
 
         public static bool IsCircularFaceView(SmartDimHelper h, IView view)
         {
-            Edge[] edges = h.GetViewEdges(view);
+            Edge[] edges = h.GetViewEdgesCached(view);
+            // Dense perforated faces have hundreds of hole circles — not a disc-thickness face.
+            if (edges.Length > 200)
+                return false;
+
             var profileCircles = edges
                 .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinRadiusMeters)
                 .Where(e => h.IsCircleProfileInView(e, view))

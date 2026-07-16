@@ -36,7 +36,7 @@ namespace SolidWorksTester.Imported
 
             if (isPrimaryView)
             {
-                SmartDimOverall.Add(h, view);
+                SmartDimOverall.Add(h, view, log);
                 AddThicknessDimensions(h, view, edges, viewName, log);
                 AddProfileArcDiameters(h, view, edges, viewName, log);
             }

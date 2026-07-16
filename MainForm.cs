@@ -112,48 +112,56 @@ namespace SolidWorksTester
                     SolidWorks.Interop.sldworks.ISldWorks? swApp = null;
                     var service = new SheetMetalDrawingService();
 
-                    for (int i = 0; i < partPaths.Count; i++)
+                    try
                     {
-                        token.ThrowIfCancellationRequested();
-
-                        string partPath = partPaths[i];
-                        UpdateStatus($"Processing {i + 1}/{partPaths.Count}: {Path.GetFileName(partPath)}");
-
-                        try
+                        for (int i = 0; i < partPaths.Count; i++)
                         {
-                            if (!File.Exists(partPath))
-                                throw new FileNotFoundException("Part file not found or not accessible.", partPath);
+                            token.ThrowIfCancellationRequested();
 
-                            swApp = SolidWorksConnection.EnsureConnected(swApp, AppendLog);
+                            string partPath = partPaths[i];
+                            UpdateStatus($"Processing {i + 1}/{partPaths.Count}: {Path.GetFileName(partPath)}");
 
-                            AppendLog("");
-                            AppendLog($"=== [{i + 1}/{partPaths.Count}] {partPath} ===");
-                            service.ProcessPart(swApp, partPath, templatePath, AppendLog);
-                            successCount++;
-                            AppendLog("Done.");
-                        }
-                        catch (Exception ex)
-                        {
-                            failCount++;
-                            AppendLog($"ERROR: {ExceptionDisplay.GetLogSummary(ex)}");
-
-                            if (SolidWorksComException.IsConnectionFailure(ex))
-                            {
-                                swApp = null;
-                                AppendLog("SOLIDWORKS connection reset — will reconnect before the next part.");
-                            }
-                        }
-                        finally
-                        {
                             try
                             {
-                                UpdateProgress(i + 1);
+                                if (!File.Exists(partPath))
+                                    throw new FileNotFoundException("Part file not found or not accessible.", partPath);
+
+                                swApp = SolidWorksConnection.EnsureConnected(swApp, AppendLog);
+
+                                AppendLog("");
+                                AppendLog($"=== [{i + 1}/{partPaths.Count}] {partPath} ===");
+                                service.ProcessPart(swApp, partPath, templatePath, AppendLog);
+                                successCount++;
+                                AppendLog("Done.");
                             }
                             catch (Exception ex)
                             {
-                                AppendLog($"Warning: progress update failed: {ExceptionDisplay.GetLogSummary(ex)}");
+                                failCount++;
+                                AppendLog($"ERROR: {ExceptionDisplay.GetLogSummary(ex)}");
+
+                                if (SolidWorksComException.IsConnectionFailure(ex))
+                                {
+                                    SolidWorksConnection.ReleaseApp(ref swApp, AppendLog);
+                                    AppendLog("SOLIDWORKS connection reset — will reconnect before the next part.");
+                                }
+                            }
+                            finally
+                            {
+                                try
+                                {
+                                    UpdateProgress(i + 1);
+                                }
+                                catch (Exception ex)
+                                {
+                                    AppendLog($"Warning: progress update failed: {ExceptionDisplay.GetLogSummary(ex)}");
+                                }
                             }
                         }
+                    }
+                    finally
+                    {
+                        // Drop RCW only — leave SOLIDWORKS open so drawings can be inspected.
+                        SolidWorksConnection.ReleaseApp(ref swApp, AppendLog);
                     }
                 }, token);
 

@@ -76,6 +76,18 @@ namespace SolidWorksTester.Services.Analysis
                    upper.Contains("SPECTACLE");
         }
 
+        /// <summary>EST Description for baffle / tube-sheet plates when Name is generic PLATE.</summary>
+        public static bool DescriptionIndicatesBafflePlate(string? description)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+                return false;
+
+            string upper = description.Trim().ToUpperInvariant();
+            return upper.Contains("BAFFLE") ||
+                   upper.Contains("TUBE SHEET") ||
+                   upper.Contains("TUBESHEET");
+        }
+
         private static string? ResolveText(CustomPropertySnapshot snapshot, string key)
         {
             if (snapshot.ConfigurationProperties.TryGetValue(key, out string? config) &&

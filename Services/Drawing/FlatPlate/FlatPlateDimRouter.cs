@@ -1,5 +1,6 @@
 using System;
 using SolidWorks.Interop.sldworks;
+using SolidWorksTester.BafflePlate;
 using SolidWorksTester.FlangeGasket;
 using SolidWorksTester.RoundFlatPlate;
 using SolidWorksTester.Services.Analysis;
@@ -19,6 +20,20 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             FlatPlateDimContext context,
             Action<string> log)
         {
+            context.ExpectedThicknessMm = analysis.EstProperties.Dim1Mm is double t && t > 0.4 && t <= 80
+                ? t
+                : null;
+
+            if (context.SubKind == FlatPlateSubKind.BafflePlate)
+            {
+                context.DimensionSamples = BafflePlateDimensionPipeline.Apply(
+                    model, drawing, dimHelper, context.PrimaryFlatView, analysis, log);
+                // Baffle pipeline already deduped after import; outer passes would re-pay HLV cost.
+                context.SkipPostPipelineDedupe = true;
+                context.SkipAutoArrange = true;
+                return;
+            }
+
             if (context.SubKind == FlatPlateSubKind.FlangeGasket)
             {
                 FlangeGasketDimensionPipeline.Apply(
@@ -44,7 +59,11 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             }
 
             if (context.UsesDiscStyleThickness)
-                RoundFlatPlateThickness.TryAddOnce(dimHelper, drawing, log);
+            {
+                RoundFlatPlateThickness.TryAddOnce(
+                    dimHelper, drawing, log, useOutlineSidePick: true,
+                    expectedThicknessMm: context.ExpectedThicknessMm);
+            }
         }
 
         public static void ApplyForView(
@@ -70,11 +89,12 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                     if (isPrimary)
                         RoundedFlatPlateDimensions.AddForPrimaryView(dimHelper, drawing, view, log);
                     else
-                        RoundedFlatPlateDimensions.AddSideViewOnly(dimHelper, view, log);
+                        RoundedFlatPlateDimensions.AddSideViewOnly(
+                            dimHelper, view, log, context.ExpectedThicknessMm);
                     break;
 
                 default:
-                    ApplyGenericView(dimHelper, context, view, isPrimary);
+                    ApplyGenericView(dimHelper, context, view, isPrimary, log);
                     break;
             }
         }
@@ -83,20 +103,29 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             SmartDimHelper dimHelper,
             FlatPlateDimContext context,
             IView view,
-            bool isPrimary)
+            bool isPrimary,
+            Action<string> log)
         {
             bool skipPrimarySmart = isPrimary && context.ModelImportUsed;
 
             if (!skipPrimarySmart && (context.PrimaryFlatView == null || isPrimary))
-                SmartDimOverall.Add(dimHelper, view);
+                SmartDimOverall.Add(dimHelper, view, log);
 
-            SmartDimThickness.Add(dimHelper, view);
+            SmartDimThickness.Add(dimHelper, view, log, context.ExpectedThicknessMm);
 
             if (!skipPrimarySmart)
             {
-                SmartDimHoles.AddForStandardViews(dimHelper, view);
-                SmartDimHolePositions.Add(dimHelper, view);
-                SmartDimCutouts.Add(dimHelper, view);
+                SmartDimFillets.Add(dimHelper, view, log);
+                SmartDimChamfers.Add(dimHelper, view, log);
+                SmartDimHoles.AddForStandardViews(dimHelper, view, log: log);
+                SmartDimHolePositions.Add(dimHelper, view, log);
+                SmartDimCutouts.Add(dimHelper, view, log);
+            }
+            else
+            {
+                // Even with model import, still add missing fillet/chamfer callouts.
+                SmartDimFillets.Add(dimHelper, view, log);
+                SmartDimChamfers.Add(dimHelper, view, log);
             }
         }
 

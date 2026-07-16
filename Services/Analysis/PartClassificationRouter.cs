@@ -99,7 +99,7 @@ namespace SolidWorksTester.Services.Analysis
             {
                 FlatPlateSubKind declared = trusted.FlatPlateSubKind.Value;
 
-                if (declared == FlatPlateSubKind.FlangeGasket)
+                if (declared is FlatPlateSubKind.FlangeGasket or FlatPlateSubKind.BafflePlate)
                 {
                     subKindSource = ClassificationSource.CustomProperty;
                     if (declared != geometrySub)
@@ -145,43 +145,7 @@ namespace SolidWorksTester.Services.Analysis
             PartAnalysisResult source,
             Action<PartAnalysisResult> mutate)
         {
-            var copy = new PartAnalysisResult
-            {
-                Kind = source.Kind,
-                BendFeatureCount = source.BendFeatureCount,
-                HasSheetMetalFeature = source.HasSheetMetalFeature,
-                IsHollow = source.IsHollow,
-                HasHoles = source.HasHoles,
-                HasChamfers = source.HasChamfers,
-                CylindricalFaceCount = source.CylindricalFaceCount,
-                IsRoundFlatProfile = source.IsRoundFlatProfile,
-                IsRoundedEndFlatProfile = source.IsRoundedEndFlatProfile,
-                CanImportSketchDimensions = source.CanImportSketchDimensions,
-                ModelSketchDimensionCount = source.ModelSketchDimensionCount,
-                FlatPlateSubKind = source.FlatPlateSubKind,
-                GeometryFlatPlateSubKind = source.GeometryFlatPlateSubKind,
-                ActiveConfiguration = source.ActiveConfiguration,
-                KindSource = source.KindSource,
-                FlatPlateSubKindSource = source.FlatPlateSubKindSource,
-                ClassificationSource = source.ClassificationSource,
-                PropertyClassificationTrusted = source.PropertyClassificationTrusted,
-                PropertyTrustFailureReason = source.PropertyTrustFailureReason,
-                DeclaredPartKind = source.DeclaredPartKind,
-                DeclaredFlatPlateSubKind = source.DeclaredFlatPlateSubKind,
-                DrawingProfile = source.DrawingProfile,
-                EstProperties = source.EstProperties,
-                PropertyOrigin = source.PropertyOrigin,
-                IsImportedGeometry = source.IsImportedGeometry,
-                ImportedShape = source.ImportedShape,
-                ImportFeatureCount = source.ImportFeatureCount,
-                ImportFeatureName = source.ImportFeatureName,
-                BboxLongMeters = source.BboxLongMeters,
-                BboxMidMeters = source.BboxMidMeters,
-                BboxShortMeters = source.BboxShortMeters,
-                SolidBodyCount = source.SolidBodyCount,
-                IsTrueCylindricalTube = source.IsTrueCylindricalTube
-            };
-
+            PartAnalysisResult copy = source.Clone();
             mutate(copy);
             return copy;
         }
@@ -203,6 +167,12 @@ namespace SolidWorksTester.Services.Analysis
             if (!string.IsNullOrWhiteSpace(raw))
             {
                 string upper = raw.Trim().ToUpperInvariant();
+                if (upper.Contains("BAFFLE") || upper.Contains("TUBESHEET") || upper.Contains("TUBE SHEET"))
+                {
+                    subKind = FlatPlateSubKind.BafflePlate;
+                    return true;
+                }
+
                 if (upper.Contains("FLANGE") || upper.Contains("GASKET"))
                 {
                     subKind = FlatPlateSubKind.FlangeGasket;

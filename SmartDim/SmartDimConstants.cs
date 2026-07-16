@@ -22,5 +22,8 @@ namespace SolidWorksTester.SmartDim
 
         /// <summary>SOLIDWORKS SelectByID2 entity type token for faces.</summary>
         public const string FaceSelectType = "FACE";
+
+        /// <summary>SOLIDWORKS SelectByID2 entity type token for edges.</summary>
+        public const string EdgeSelectType = "EDGE";
     }
 }
