@@ -9,7 +9,9 @@ namespace SolidWorksTester
     /// coordinate transforms, and display-dimension helpers.
     /// <para>
     /// Implementation is split across partial files in <c>SmartDim/</c> by responsibility
-    /// (view entities, edge geometry, faces, selection, dimensions, features).
+    /// (view entities, edge geometry, faces, selection, features, dimensions).
+    /// Dimension helpers are further split:
+    /// <c>Dimensions</c> (create), <c>Dimensions.Query</c>, <c>Dimensions.Text</c>, <c>Dimensions.Delete</c>.
     /// </para>
     /// </summary>
     public partial class SmartDimHelper

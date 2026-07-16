@@ -94,13 +94,14 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                     break;
 
                 default:
-                    ApplyGenericView(dimHelper, context, view, isPrimary, log);
+                    ApplyGenericView(dimHelper, drawing, context, view, isPrimary, log);
                     break;
             }
         }
 
         private static void ApplyGenericView(
             SmartDimHelper dimHelper,
+            IDrawingDoc drawing,
             FlatPlateDimContext context,
             IView view,
             bool isPrimary,
@@ -110,6 +111,9 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
 
             if (!skipPrimarySmart && (context.PrimaryFlatView == null || isPrimary))
                 SmartDimOverall.Add(dimHelper, view, log);
+
+            if (isPrimary)
+                SmartDimSymmetryCenterlines.AddForPrimaryFlatView(dimHelper, drawing, view, log);
 
             SmartDimThickness.Add(dimHelper, view, log, context.ExpectedThicknessMm);
 
