@@ -48,3 +48,9 @@ Target format still outstanding for later iterations (P2–P4):
 - Sheet A1/scale: `Services/Drawing/DrawingSheetProfile.cs`
 - Mass kg: `Services/Drawing/DrawingMassUnits.cs`
 - Routing: `FlatPlateSubKindResolver`, `FlatPlateDimRouter`
+
+## See also
+
+- [Flat-plate sub-kinds](flat-plate-subkinds.md)
+- [Arc-sector plate](../modules/arc-sector-plate.md) — different nested strategy
+- [Pipeline router](pipeline-router.md)

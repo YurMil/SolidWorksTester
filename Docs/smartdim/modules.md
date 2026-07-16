@@ -1,16 +1,24 @@
-# SmartDim modules A–G
+# SmartDim modules
 
 [← SmartDim overview](overview.md) · [SmartDimHelper](helper-facade.md)
 
-Each module is a static class with `Add(...)` or view-specific entry points. All take `SmartDimHelper` + `IView` unless noted.
+Modules live under `SmartDim/Modules/`. Most expose `Add(...)` or view-specific entry points and take `SmartDimHelper` + `IView`.
 
 ---
 
-## Module A — `SmartDimOverall`
+## Module A — `SmartDimOverall` (partials)
 
-**File:** `SmartDim/Modules/SmartDimOverall.cs`
+Overall width/height (rectangles, trapezoids, outline fallback).
 
-Overall width and height of the part silhouette in each orthographic view. Uses extreme edges visible in the view.
+| File | Responsibility |
+| --- | --- |
+| `SmartDimOverall.cs` | Entry `Add`, edge collect, orchestration |
+| `SmartDimOverall.Vertical.cs` | Height (`Overall_H`), trapezoid left vertical |
+| `SmartDimOverall.Horizontal.cs` | Width (`Overall_W`) |
+| `SmartDimOverall.Trapezoid.cs` | Top/bottom widths + taper angle |
+| `SmartDimOverall.Helpers.cs` | Boundary/arc pick, outline pick, `ApplyArcEndMax` |
+
+`SetArcEndCondition(Index, Condition)` uses entity index **1 or 2** and Max so arc spans reach the tangent.
 
 ---
 
@@ -18,13 +26,7 @@ Overall width and height of the part silhouette in each orthographic view. Uses 
 
 **File:** `SmartDim/Modules/SmartDimThickness.cs`
 
-Sheet gauge/thickness:
-
-- Finds parallel edge pairs representing material thickness
-- Skips **circular face views** (delegated to round plate module)
-- Uses shortest-edge and vertex-extreme fallbacks
-
-Round plates use `RoundFlatPlateThickness` instead when in round mode.
+Sheet gauge/thickness (parallel edges; skips circular face views). Round / disc / arc-sector / flange / baffle often use specialised thickness helpers instead.
 
 ---
 
@@ -32,9 +34,7 @@ Round plates use `RoundFlatPlateThickness` instead when in round mode.
 
 **File:** `SmartDim/Modules/SmartDimHoles.cs`
 
-Radial dimensions on circular edges (holes). Supports `excludeDiameter` to skip the outer profile circle on round plates.
-
-Entry: `AddForStandardViews(helper, view)` in flat pipeline.
+Hole diameters with quantity prefix. `AddForStandardViews` for flat pipeline; supports `excludeDiameter` for outer profile circles.
 
 ---
 
@@ -42,7 +42,7 @@ Entry: `AddForStandardViews(helper, view)` in flat pipeline.
 
 **File:** `SmartDim/Modules/SmartDimHolePositions.cs`
 
-Linear dimensions locating hole centers relative to edges or origin geometry.
+Linear dims from boundary edges to hole centers (Generic path). ArcSector uses its own hole-position branch.
 
 ---
 
@@ -50,58 +50,66 @@ Linear dimensions locating hole centers relative to edges or origin geometry.
 
 **File:** `SmartDim/Modules/SmartDimCutouts.cs`
 
-Dimensions for cutouts, slots, and non-circular openings visible in the view.
+Cutouts, slots, non-circular openings.
 
 ---
 
 ## Module F — `SmartDimBends`
 
-**File:** `SmartDim/Modules/SmartDimBends.cs`
-
-**Pipeline:** P-02 orthographic views only.
-
-Bend-related annotations where bend lines/edges are visible in standard views.
+**File:** `SmartDim/Modules/SmartDimBends.cs`  
+**Pipeline:** P-02 orthographic views.
 
 ---
 
 ## Module G — `SmartDimFlatBendLines`
 
-**File:** `SmartDim/Modules/SmartDimFlatBendLines.cs`
+**File:** `SmartDim/Modules/SmartDimFlatBendLines.cs`  
+**Pipeline:** P-02 flat pattern only.
 
-**Pipeline:** P-02 flat pattern view (`Drawing View4`) only.
+---
 
-Annotates bend lines on the flat pattern view from the View Palette.
+## Additional flat-plate modules
+
+| Module | File | Role |
+| --- | --- | --- |
+| `SmartDimFillets` | `SmartDimFillets.cs` | Corner fillet R (small arcs) |
+| `SmartDimChamfers` | `SmartDimChamfers.cs` | Chamfer legs |
+| `SmartDimSymmetryCenterlines` | `SmartDimSymmetryCenterlines.cs` | Bilateral symmetry → H/V `InsertCenterLine2` |
+
+Symmetry: hole-center (or outer-edge) mirror test about bbox midlines; wired from Generic primary view in `FlatPlateDimRouter`.
 
 ---
 
 ## Pipeline matrix
 
-| Module | P-01 Flat | P-02 Bent (1–3) | P-02 Flat pat. | P-03 Cyl. |
-| --- | --- | --- | --- | --- |
-| A Overall | ✓ | ✓ | — | — |
-| B Thickness | ✓* | ✓ | — | — |
-| C Holes | ✓ | ✓ | — | — |
-| D Hole pos. | ✓ | ✓ | — | — |
-| E Cutouts | ✓ | ✓ | — | — |
-| F Bends | — | ✓ | — | — |
-| G Flat bends | — | — | ✓ | — |
+| Module | P-01 Generic | P-01 Round/Arc/… | P-02 Bent (1–3) | P-02 Flat | P-03 |
+| --- | --- | --- | --- | --- | --- |
+| A Overall | ✓ | Domain | ✓ | — | — |
+| Symmetry CLs | ✓ primary | Domain | — | — | — |
+| B Thickness | ✓ | Domain | ✓ | — | — |
+| Fillets/Chamfers | ✓ | Domain | — | — | — |
+| C Holes | ✓ | Domain | ✓ | — | — |
+| D Hole pos. | ✓ | Domain | ✓ | — | — |
+| E Cutouts | ✓ | — | ✓ | — | — |
+| F Bends | — | — | ✓ | — | — |
+| G Flat bends | — | — | — | ✓ | — |
 
-\*Round mode replaces A–E with `RoundFlatPlate*` modules.
+\*RoundDisc / RoundedEnd / ArcSector / Flange / Baffle replace Generic modules with domain folders — see [flat-plate-subkinds.md](../drawing/flat-plate-subkinds.md).
 
 ---
 
-## Adding a new module
+## Adding a new SmartDim module
 
-1. Create `SmartDimYourFeature.cs` in project root (matches existing convention).
+1. Create `SmartDim/Modules/SmartDimYourFeature.cs`.
 2. Static `Add(SmartDimHelper helper, IView view, Action<string>? log = null)`.
-3. Use `TryMarkDimensioned` for session dedupe.
-4. Wire into the appropriate pipeline's `ApplyDimensions` loop.
-5. Document here and in [Adding a pipeline](../development/adding-a-pipeline.md).
+3. Use `DimensionedFeatures` / value checks for session dedupe.
+4. Wire into `FlatPlateDimRouter` or the target pipeline.
+5. Document here + [flat-plate-subkinds.md](../drawing/flat-plate-subkinds.md) if P-01 nested.
 
 ---
 
 ## See also
 
 - [Flat plate pipeline](../drawing/pipeline-flat-plate.md)
-- [Bent sheet metal pipeline](../drawing/pipeline-bent-sheet-metal.md)
-- [Round flat plate](../modules/round-flat-plate.md)
+- [Arc-sector plate](../modules/arc-sector-plate.md)
+- [Helper facade](helper-facade.md)

@@ -44,9 +44,26 @@
 | Flag | Meaning |
 | --- | --- |
 | `IsRoundFlatProfile` | Disc-like flat plate (round OD) |
+| `IsRoundedEndFlatProfile` | Straight edge + rounded / segment end |
+| `FlatPlateSubKind` | Nested P-01 strategy (Generic, ArcSector, …) |
 | `IsHollow` | Tube/pipe (inner + outer radius) |
 | `HasSheetMetalFeature` | Sheet metal feature in tree |
 | `BendFeatureCount` | Count of bend-type features |
+
+---
+
+## Flat-plate sub-kinds (short)
+
+| `FlatPlateSubKind` | Meaning |
+| --- | --- |
+| `Generic` | Default plate dims + optional symmetry centerlines |
+| `RoundDisc` | Full circular plate |
+| `RoundedEnd` | Chord + single large arc |
+| `ArcSector` | Concentric R_in/R_out + radial ends |
+| `FlangeGasket` | Flange / gasket pattern |
+| `BafflePlate` | Dense hole / tube-sheet plate |
+
+Detail: [flat-plate-subkinds.md](drawing/flat-plate-subkinds.md).
 
 ---
 

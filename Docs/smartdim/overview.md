@@ -11,6 +11,7 @@
 ```mermaid
 flowchart LR
     SH[SmartDimHelper] --> A[SmartDimOverall]
+    SH --> SYM[SymmetryCenterlines]
     SH --> B[SmartDimThickness]
     SH --> C[SmartDimHoles]
     SH --> D[SmartDimHolePositions]
@@ -23,7 +24,7 @@ flowchart LR
 | --- | --- |
 | Facade | `SmartDim/SmartDimHelper*.cs` (partial class) |
 | Constants | `SmartDim/SmartDimConstants.cs` |
-| Modules A–G | Project root `SmartDim*.cs` |
+| Modules | `SmartDim/Modules/*.cs` (Overall partials, Thickness, Holes, …, Symmetry) |
 
 ---
 

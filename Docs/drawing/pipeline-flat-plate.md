@@ -1,9 +1,11 @@
 # Flat plate pipeline (P-01)
 
-[← Pipelines overview](pipelines-overview.md)
+[← Pipelines overview](pipelines-overview.md) · [Sub-kinds matrix](flat-plate-subkinds.md)
 
 **Class:** `FlatPlateDrawingPipeline`  
-**Trigger:** `PartModelKind.FlatPlate` — sheet metal **without** bend features, or non-sheet parts classified as flat.
+**Trigger:** `PartModelKind.FlatPlate` — sheet metal **without** bend features, or non-sheet parts classified as flat (including EST `PLATE` overriding cylindrical geometry).
+
+Nested dimension strategy: `FlatPlateSubKindResolver` → `FlatPlateDimRouter` (see [flat-plate-subkinds.md](flat-plate-subkinds.md)).
 
 ---
 
@@ -20,56 +22,68 @@ Flat parts without bends do not use the sheet-metal flat pattern view.
 
 ---
 
-## Dimension strategy
+## Dimension strategies by sub-kind
 
-### Standard rectangular flat plate
+### Generic
 
-For each orthographic view (skips View4):
+For each orthographic view (skips isometric):
 
-1. `SmartDimOverall` — overall width/height **only on the primary flat-lying view** (`FlatPlateViewAnalyzer.FindPrimaryFlatLyingView` — largest projected bbox among ortho views)
-2. `SmartDimThickness` — gauge (parallel edges)
-3. `SmartDimHoles` — hole diameters
-4. `SmartDimHolePositions` — hole location dims
-5. `SmartDimCutouts` — cutout/notch sizes
+1. `SmartDimOverall` — overall W/H on primary flat-lying view (partials: Vertical / Horizontal / Trapezoid / Helpers)
+2. `SmartDimSymmetryCenterlines` — H/V centerlines when bilateral symmetry detected (primary only)
+3. `SmartDimThickness` — gauge
+4. `SmartDimFillets` / `SmartDimChamfers`
+5. `SmartDimHoles` / `SmartDimHolePositions` / `SmartDimCutouts`
 
-### Round flat plate mode
+Optional: model sketch import when `CanImportSketchDimensions`.
 
-Activated when:
+### RoundDisc
 
-- `PartAnalysisResult.IsRoundFlatProfile` is true (bbox heuristic), **or**
-- `RoundFlatPlateViewAnalyzer.DetectFromDrawing` finds circular face views
+- `RoundFlatPlateDimensions` — OD, centerlines, holes (outer Ø excluded)
+- `RoundFlatPlateThickness` once after views
 
-Per orthographic view:
+See [Round flat plate](../modules/round-flat-plate.md).
 
-- `RoundFlatPlateDimensions.AddForView` — OD, centerlines, holes (outer Ø excluded)
+### RoundedEnd
 
-Once after all views:
+- Primary: `RoundedFlatPlateDimensions` — overall, outer arc, tip, holes
+- Sides: thickness
 
-- `RoundFlatPlateDimensions.AddThicknessOnce` → `RoundFlatPlateThickness`
+### ArcSector
 
-See [Round flat plate module](../modules/round-flat-plate.md).
+- Primary: `ArcSectorDimensionPipeline` — R_in/R_out, angle, strip width, bbox, hole Ø + 2 coords
+- Sides: thickness
+
+See [Arc-sector plate](../modules/arc-sector-plate.md).
+
+### FlangeGasket / BafflePlate
+
+Dedicated domain pipelines (`FlangeGasket/`, `BafflePlate/`). See [baffle-plate-pipeline.md](baffle-plate-pipeline.md).
 
 ---
 
 ## Post-processing
 
-- **Deduper** excludes `Drawing View4` (isometric has no driven dims).
-- Auto-arrange and scale adjustment run on all views.
+- **Deduper** excludes isometric (`Drawing View4` when used as iso).
+- Auto-arrange and `SheetLayoutNormalizer` (via `AdjustSheetScaleIfNeeded`).
+- EST quality validate against Dim2/Dim3 hints when present.
 
 ---
 
 ## Logging markers
 
 ```
-Using flat-plate drawing pipeline (3 views + isometric, no flat pattern).
+Using flat-plate drawing pipeline (3 views + isometric, no flat pattern). [P-01 FlatPlate]
+Generic flat plate mode: overall, thickness, holes.
 Round flat plate mode: OD, centerlines, side-view thickness.
-Primary flat view for overall dims: Drawing View2
+Arc-sector plate mode: R_in/R_out, angle or radial strip, bbox, hole Ø + 2 coords, thickness.
+Primary flat view: Drawing View2
 ```
 
 ---
 
 ## See also
 
-- [Part classification](part-classification.md) — `IsRoundFlatDisc`
+- [Flat-plate sub-kinds (traceability)](flat-plate-subkinds.md)
+- [Part classification](part-classification.md)
 - [SmartDim modules](../smartdim/modules.md)
-- [Pipeline bent sheet metal](pipeline-bent-sheet-metal.md) — contrast with flat pattern
+- [Pipeline bent sheet metal](pipeline-bent-sheet-metal.md)
