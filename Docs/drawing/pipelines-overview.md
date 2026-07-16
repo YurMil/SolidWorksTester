@@ -10,7 +10,7 @@ Three pipelines implement the drawing automation strategy. Dispatch is in `Sheet
 
 | ID | Enum | Class | Views | Fourth view | Primary SmartDim |
 | --- | --- | --- | --- | --- | --- |
-| **P-01** | `FlatPlate` | `FlatPlateDrawingPipeline` | Front, Top, Right | **Isometric** | Modules A–E + RoundFlatPlate |
+| **P-01** | `FlatPlate` | `FlatPlateDrawingPipeline` | Front, Top, Right | **Isometric** | Sub-kinds: Generic SmartDim, RoundDisc, RoundedEnd, ArcSector, Flange, Baffle |
 | **P-02** | `BentSheetMetal` | `BentSheetMetalDrawingPipeline` | Front, Top, Right | **Flat pattern** | Modules A–G |
 | **P-03** | `Cylindrical` | `CylindricalDrawingPipeline` | Front, Top, Right | **Isometric** | `Cylindrical/*` modules |
 | **P-04** | `ImportedGeometry` | `ImportedGeometryDrawingPipeline` | Front, Top, Right | **Isometric** | `Imported/*` + SmartDim A,C,D |
@@ -69,6 +69,8 @@ Constant: `SmartDimConstants.IsometricViewName = "Drawing View4"`.
 | Pipeline | Detail doc |
 | --- | --- |
 | P-01 Flat plate | [pipeline-flat-plate.md](pipeline-flat-plate.md) |
+| P-01 sub-kinds | [flat-plate-subkinds.md](flat-plate-subkinds.md) |
+| P-01 ArcSector | [arc-sector-plate.md](../modules/arc-sector-plate.md) |
 | P-02 Bent sheet metal | [pipeline-bent-sheet-metal.md](pipeline-bent-sheet-metal.md) |
 | P-03 Cylindrical | [pipeline-cylindrical.md](pipeline-cylindrical.md) |
 | P-04 Imported geometry | [pipeline-imported-geometry.md](pipeline-imported-geometry.md) |

@@ -49,7 +49,8 @@ flowchart TB
     end
 
     subgraph Annotations["Annotation modules"]
-        SD[SmartDim/Modules A–G]
+        SD[SmartDim/Modules]
+        ARC[ArcSector]
         RFP[RoundFlatPlate]
         FG[FlangeGasket]
         BP[BafflePlate]
@@ -74,6 +75,7 @@ flowchart TB
     BS --> SH
     CY --> SH
     FP --> SD
+    FP --> ARC
     FP --> RFP
     FP --> FG
     FP --> BP

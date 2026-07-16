@@ -44,23 +44,27 @@ This folder is the **engineering documentation hub** for the codebase. It is sep
 
 ### Drawing automation
 
-- [Pipelines overview](drawing/pipelines-overview.md) — P-01 / P-02 / P-03 comparison
+- [Pipelines overview](drawing/pipelines-overview.md) — P-01…P-05 comparison
 - [Flat plate pipeline (P-01)](drawing/pipeline-flat-plate.md)
+- [Flat-plate sub-kinds (traceability)](drawing/flat-plate-subkinds.md) — Generic → ArcSector matrix
+- [Baffle plate pipeline](drawing/baffle-plate-pipeline.md)
 - [Bent sheet metal pipeline (P-02)](drawing/pipeline-bent-sheet-metal.md)
 - [Cylindrical pipeline (P-03)](drawing/pipeline-cylindrical.md)
 - [Part classification](drawing/part-classification.md) — `PartModelAnalyzer`, feature sets, thresholds
+- [Pipeline router](drawing/pipeline-router.md)
 - [Shared drawing services](drawing/shared-drawing-services.md) — views, scale, arrange
 - [Dimension deduper](drawing/dimension-deduper.md) — cross-view duplicate removal
 
 ### Smart dimensioning
 
-- [SmartDim overview](smartdim/overview.md) — modules A–G, session dedupe
-- [SmartDimHelper facade](smartdim/helper-facade.md) — partial classes, selection, geometry
-- [SmartDim modules](smartdim/modules.md) — per-module behaviour and API usage
+- [SmartDim overview](smartdim/overview.md) — modules, session dedupe
+- [SmartDimHelper facade](smartdim/helper-facade.md) — partial classes (incl. Dimensions.*)
+- [SmartDim modules](smartdim/modules.md) — Overall partials, symmetry CLs, A–G
 
 ### Specialised modules
 
-- [Round flat plate](modules/round-flat-plate.md) — disc detection, OD, thickness
+- [Round flat plate](modules/round-flat-plate.md) — disc / rounded-end
+- [Arc-sector plate](modules/arc-sector-plate.md) — concentric arcs, R_in/R_out, strip, holes
 - [Cylindrical annotations](modules/cylindrical-annotations.md) — centerlines, OD/ID, model import
 
 ### UI & packaging
@@ -90,10 +94,10 @@ This folder is the **engineering documentation hub** for the codebase. It is sep
 | --- | --- |
 | `Services/` | COM orchestration, analysis, drawing pipelines, routing |
 | `SmartDim/` | Shared dimensioning facade; modules in `SmartDim/Modules/` |
-| `Cylindrical/` / `LoftedBends/` / `BafflePlate/` / … | Domain annotation modules |
+| `ArcSector/` / `RoundFlatPlate/` / `BafflePlate/` / `Cylindrical/` / `LoftedBends/` / … | Domain annotation modules |
 | `UI/` | WinForms shell, theme, release-notes viewer |
 | `Docs/ReleaseNotes/` | User-facing Markdown per version |
-| `SolidWorksTester.Tests/` | Pure unit tests (registry, router, clone) |
+| `SolidWorksTester.Tests/` | Pure unit tests (registry, router, clone, symmetry mirror) |
 | `publish.bat` | Standalone EXE publish script |
 
 ---

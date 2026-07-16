@@ -100,9 +100,18 @@ Do **not** add a kind `switch` in `SheetMetalDrawingService` — it already call
 
 | Approach | When |
 | --- | --- |
-| New `SmartDim/Modules/SmartDim*.cs` | Sheet-metal-like dims on orthographic views |
-| New subfolder (like `Cylindrical/`, `BafflePlate/`) | Distinct geometry domain |
-| Flat-plate sub-kind | Nested under P-01 via `FlatPlateSubKind` + `FlatPlateDimRouter` |
+| New `SmartDim/Modules/SmartDim*.cs` | Shared orthographic dims |
+| New domain folder (`ArcSector/`, `BafflePlate/`, …) | Distinct geometry family |
+| Flat-plate sub-kind | Nested under P-01: enum + classifier + `FlatPlateSubKindResolver` + `FlatPlateDimRouter` |
+
+### Adding a P-01 sub-kind (checklist)
+
+1. Add value to `FlatPlateSubKind`.
+2. Detect in `FlatPlateClassifier` and/or `*ViewAnalyzer` (+ property tokens if needed).
+3. Wire resolve override in `FlatPlateSubKindResolver` (order vs Generic/Baffle/Flange).
+4. Implement dim pipeline (prefer one orchestrator + branch files, like `ArcSector/`).
+5. Call from `FlatPlateDimRouter.ApplyForView`.
+6. Document in [flat-plate-subkinds.md](../drawing/flat-plate-subkinds.md) and a module page under `Docs/modules/`.
 
 Use `SmartDimHelper` for selection and session dedupe. Pass `Action<string> log` into modules (no `Console.WriteLine`).
 
@@ -119,9 +128,10 @@ Add cases under `SolidWorksTester.Tests`:
 
 ## 7. Document
 
-Create `Docs/drawing/pipeline-your-new-kind.md` and link from:
+Create `Docs/drawing/pipeline-your-new-kind.md` (or `Docs/modules/…` for a P-01 sub-kind) and link from:
 
 - [Pipelines overview](../drawing/pipelines-overview.md)
+- [Flat-plate sub-kinds](../drawing/flat-plate-subkinds.md) when nested under P-01
 - [Pipeline router](../drawing/pipeline-router.md)
 - [Documentation hub](../README.md)
 

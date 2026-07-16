@@ -2,9 +2,11 @@
 
 [← Documentation hub](../README.md) · [Flat plate pipeline (P-01)](../drawing/pipeline-flat-plate.md)
 
-Specialised annotation for **circular flat sheet** parts (discs, round plates) without bends.
+Specialised annotation for **circular flat sheet** parts (discs, round plates) and **rounded-end / segment** plates without bends.
 
 **Folder:** `RoundFlatPlate/`
+
+Related: annular **sector** plates (two concentric arcs) live in **`ArcSector/`** — see [arc-sector-plate.md](arc-sector-plate.md). Do not conflate with `RoundDisc` or `RoundedEnd`.
 
 ---
 
@@ -62,6 +64,8 @@ When round mode is active, modules A–E are **not** called per view. Thickness 
 
 ## See also
 
-- [Part classification](../drawing/part-classification.md) — `IsRoundFlatDisc`
-- [SmartDim module B](../smartdim/modules.md#module-b--smartdimthickness)
+- [Flat-plate sub-kinds](../drawing/flat-plate-subkinds.md)
+- [Arc-sector plate](arc-sector-plate.md) — concentric sector (different sub-kind)
+- [Part classification](../drawing/part-classification.md)
+- [SmartDim modules](../smartdim/modules.md)
 - [Units & coordinates](../solidworks-api/units-and-coordinates.md)

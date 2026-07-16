@@ -126,16 +126,39 @@ Runtime fallback: `RoundFlatPlateViewAnalyzer.DetectFromDrawing` can enable roun
 
 ---
 
+## Flat-plate sub-kinds (`FlatPlateSubKind`)
+
+After `Kind == FlatPlate`, nested strategy is set by `FlatPlateClassifier` / properties / drawing resolvers:
+
+| Value | Typical geometry |
+| --- | --- |
+| `Generic` | Rectangular / irregular plate |
+| `RoundDisc` | Full circular face |
+| `RoundedEnd` | Chord + one large arc |
+| `ArcSector` | Two concentric arcs + radial ends |
+| `FlangeGasket` | OD/ID + bolt circle |
+| `BafflePlate` | Dense hole array |
+
+Full wiring matrix: [flat-plate-subkinds.md](flat-plate-subkinds.md).  
+ArcSector details: [arc-sector-plate.md](../modules/arc-sector-plate.md).
+
+Note: EST Name `PLATE` may force `Kind=FlatPlate` even when geometry first looked cylindrical (e.g. large rim cylinders on an arc sector).
+
+---
+
 ## Analysis lifecycle
 
 - Opens with `swOpenDocOptions_Silent`
-- Always closes in `finally` via `swApp.CloseDoc(partPath)`
-- Does **not** modify the part
+- On **success**, the part document stays open for drawing view creation; `SheetMetalDrawingService` closes the part after the drawing is saved/closed
+- On **analysis failure**, the part is closed immediately
+- Analysis does **not** modify the part (flat-pattern unsuppress may save during bent/ArcSector drawing paths)
 
 ---
 
 ## See also
 
 - [Pipelines overview](pipelines-overview.md)
+- [Flat-plate sub-kinds](flat-plate-subkinds.md)
 - [Round flat plate](../modules/round-flat-plate.md)
+- [Arc-sector plate](../modules/arc-sector-plate.md)
 - [Units & coordinates](../solidworks-api/units-and-coordinates.md)
