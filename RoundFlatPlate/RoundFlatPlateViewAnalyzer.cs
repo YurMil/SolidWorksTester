@@ -17,9 +17,16 @@ namespace SolidWorksTester.RoundFlatPlate
                 return false;
 
             var profileCircles = edges
-                .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinRadiusMeters)
-                .Where(e => h.IsCircleProfileInView(e, view))
+                .Where(e => h.IsDimensionableCircleInView(e, view) && h.GetCircleRadius(e) > MinRadiusMeters)
                 .ToArray();
+
+            if (profileCircles.Length == 0)
+            {
+                // Fallback: full circles without axis check (some imports report bad axis).
+                profileCircles = edges
+                    .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinRadiusMeters)
+                    .ToArray();
+            }
 
             if (profileCircles.Length == 0)
                 return false;
@@ -42,7 +49,7 @@ namespace SolidWorksTester.RoundFlatPlate
                 return null;
 
             return h.GetViewEdges(view)
-                .Where(e => h.IsCircular(e) && h.IsFullCircle(e) && h.GetCircleRadius(e) > MinRadiusMeters)
+                .Where(e => h.IsDimensionableCircleInView(e, view) && h.GetCircleRadius(e) > MinRadiusMeters)
                 .OrderByDescending(h.GetCircleRadius)
                 .FirstOrDefault();
         }

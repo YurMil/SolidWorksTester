@@ -44,6 +44,11 @@ namespace SolidWorksTester.Services.Drawing.Routing
                 ["baffle_plate"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.BafflePlate, true),
                 ["baffle_plate_fuzzy"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.BafflePlate, true),
 
+                // Blind / ring flanges & gaskets (EST Description or DrawingProfile)
+                ["flange"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.FlangeGasket, true),
+                ["gasket"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.FlangeGasket, true),
+                ["flange_blind_plate"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.FlangeGasket, true),
+
                 // Flat families without dedicated dim modules yet
                 ["lifting_lug"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.Generic, false),
                 ["lifting_lug_vertical"] = new(DrawingPipelineId.FlatPlate, FlatPlateSubKind.Generic, false),

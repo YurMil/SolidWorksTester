@@ -27,13 +27,19 @@ namespace SolidWorksTester.Services.Drawing
         public static int CountDimensionsInView(IView view)
         {
             int count = 0;
-            Annotation? ann = view.GetFirstAnnotation3();
-            while (ann != null)
+            var visited = new System.Collections.Generic.HashSet<int>();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
+            int guard = 0;
+            while (ann != null && guard++ < 400)
             {
+                int id = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(ann);
+                if (!visited.Add(id))
+                    break;
+
                 if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
                     count++;
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
 
             return count;
@@ -173,19 +179,16 @@ namespace SolidWorksTester.Services.Drawing
         private static int RemoveZeroValueDimensions(IModelDoc2 model, IView view)
         {
             int removed = 0;
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             var toDelete = new System.Collections.Generic.List<IAnnotation>();
 
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
-                {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    if (displayDim != null && IsZeroDimension(displayDim))
-                        toDelete.Add(ann);
-                }
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null && IsZeroDimension(displayDim))
+                    toDelete.Add(ann);
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
 
             if (toDelete.Count > 0)
@@ -206,7 +209,7 @@ namespace SolidWorksTester.Services.Drawing
         {
             try
             {
-                Dimension? dim = displayDim.GetDimension2(0) as Dimension;
+                Dimension? dim = DrawingAnnotationWalk.GetModelDimension(displayDim);
                 if (dim == null)
                     return false;
 

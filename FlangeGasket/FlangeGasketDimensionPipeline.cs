@@ -23,6 +23,13 @@ namespace SolidWorksTester.FlangeGasket
 
             timer.Measure("Step 1: import marked dims", () =>
             {
+                if (analysis?.IsImportedGeometry == true ||
+                    analysis?.ImportFeatureCount > 0)
+                {
+                    log("  Step 1: skip model import (imported / dumb solid — no marked dims).");
+                    return;
+                }
+
                 log("  Step 1: import model dimensions to all views...");
                 DrawingModelDimensionImport.ImportMarkedDimensionsToAllViews(model, drawing, log);
             });
@@ -92,15 +99,20 @@ namespace SolidWorksTester.FlangeGasket
 
         private static double? ResolveExpectedThicknessMm(PartAnalysisResult? analysis)
         {
-            if (analysis?.EstProperties == null)
-                return null;
+            if (analysis?.EstProperties != null)
+            {
+                EstPartProperties est = analysis.EstProperties;
+                // Blind flanges often store gabarit thickness in DIM1 when DIM3 is empty.
+                if (est.Dim3Mm is > 0 and <= 500)
+                    return est.Dim3Mm;
+                if (est.Dim1Mm is > 0 and <= 500)
+                    return est.Dim1Mm;
+            }
 
-            EstPartProperties est = analysis.EstProperties;
-            // Blind flanges often store gabarit thickness in DIM1 when DIM3 is empty.
-            if (est.Dim3Mm is > 0 and <= 500)
-                return est.Dim3Mm;
-            if (est.Dim1Mm is > 0 and <= 500)
-                return est.Dim1Mm;
+            // Imported STEP: use part bbox short axis as gabarit thickness seed.
+            if (analysis?.BboxShortMeters is > 0.0004 and <= 0.5)
+                return analysis.BboxShortMeters * 1000.0;
+
             return null;
         }
     }

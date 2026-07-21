@@ -25,9 +25,13 @@ namespace SolidWorksTester.Cylindrical
             Action<string> log)
         {
             string viewName = view.GetName2();
-            Edge[] edges = h.GetViewEdges(view);
+            log($"  [CylSizes] start {viewName}");
+            Edge[] edges = h.GetViewEdgesCached(view);
             if (edges.Length == 0)
+            {
+                log($"  [CylSizes] no edges in {viewName}.");
                 return;
+            }
 
             // Full circles OR arcs (lengthwise-cut pipes show semi-circular profiles).
             Edge[] profileCircles = CylindricalViewAnalyzer.GetEndFaceCircles(h, view, edges);
@@ -46,12 +50,16 @@ namespace SolidWorksTester.Cylindrical
 
             if (profileCircles.Length > 0 && isEndFaceView)
             {
+                log($"  [CylSizes] end-face path ({profileCircles.Length} arcs/circles).");
                 AddEndViewDimensions(h, view, viewName, profileCircles, analysis, log);
             }
             else
             {
+                log($"  [CylSizes] side-view length path ({edges.Length} edges).");
                 AddSideViewLength(h, view, viewName, edges, log);
             }
+
+            log($"  [CylSizes] done {viewName}");
         }
 
         /// <summary>Backward-compatible overload.</summary>
@@ -283,6 +291,10 @@ namespace SolidWorksTester.Cylindrical
                     log($"  {label} Ø{diameter * 1000:F1} mm in {viewName}.");
                 }
             }
+            catch (InvalidCastException ex)
+            {
+                log($"  Warning: {label} dimension cast failed in {viewName}: {ex.Message}");
+            }
             finally
             {
                 h.ClearSelection();
@@ -394,8 +406,15 @@ namespace SolidWorksTester.Cylindrical
                 return;
 
             string key = $"Cyl_{label}_{length:F4}";
-            if (h.DimensionedFeatures.Contains(key) || h.HasDimensionWithValueInDrawing(length))
-                return;
+            try
+            {
+                if (h.DimensionedFeatures.Contains(key) || h.HasDimensionWithValueInDrawing(length))
+                    return;
+            }
+            catch (InvalidCastException)
+            {
+                // Continue — duplicate probe failed due to interop cast; still try to place dim.
+            }
 
             try
             {
@@ -413,6 +432,10 @@ namespace SolidWorksTester.Cylindrical
                     h.DimensionedFeatures.Add(key);
                     log($"  {label} {length * 1000:F1} mm in {viewName}.");
                 }
+            }
+            catch (InvalidCastException ex)
+            {
+                log($"  Warning: {label} dimension cast failed in {viewName}: {ex.Message}");
             }
             finally
             {

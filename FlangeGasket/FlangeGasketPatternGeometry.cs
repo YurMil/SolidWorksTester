@@ -15,8 +15,20 @@ namespace SolidWorksTester.FlangeGasket
 
         public static FlangeDiscGeometry? Analyze(SmartDimHelper h, IView view, Edge[] edges)
         {
-            Edge? outer = edges
-                .Where(e => h.IsCircular(e) && h.IsFullCircle(e))
+            Edge[] profileCircles = edges
+                .Where(e => h.IsDimensionableCircleInView(e, view) ||
+                            (h.IsCircular(e) && h.IsFullCircle(e)))
+                .ToArray();
+
+            // Imported STEP often splits the OD into arcs — rebuild candidates by center+radius.
+            if (profileCircles.Length == 0)
+            {
+                profileCircles = RebuildClosedCirclesFromArcs(h, view, edges);
+                if (profileCircles.Length == 0)
+                    return null;
+            }
+
+            Edge? outer = profileCircles
                 .OrderByDescending(h.GetCircleRadius)
                 .FirstOrDefault();
 
@@ -30,10 +42,20 @@ namespace SolidWorksTester.FlangeGasket
             double polarTolerance = Math.Max(0.003, outerRadius * 0.004);
             double maxCenterOffset = Math.Max(MinCenterConcentricMeters, outerRadius * CenterConcentricFactor);
 
-            var fullCircles = edges
-                .Where(e => h.IsCircular(e) && h.IsFullCircle(e))
+            var fullCircles = profileCircles
                 .Where(e => h.GetCircleRadius(e) < outerRadius * 0.98)
                 .ToArray();
+
+            // Also include smaller circular hole edges that may not pass the long-arc threshold.
+            var extraHoles = edges
+                .Where(h.IsCircular)
+                .Where(e => h.IsFullCircle(e) || h.IsCircleProfileInView(e, view))
+                .Where(e => h.GetCircleRadius(e) < outerRadius * 0.98)
+                .Where(e => !fullCircles.Contains(e))
+                .ToArray();
+
+            if (extraHoles.Length > 0)
+                fullCircles = fullCircles.Concat(extraHoles).Distinct().ToArray();
 
             Edge? innerBore = FindInnerBore(h, view, fullCircles, center, maxCenterOffset);
             double? innerDiameter = innerBore != null ? h.GetCircleRadius(innerBore) * 2.0 : null;
@@ -59,6 +81,54 @@ namespace SolidWorksTester.FlangeGasket
                 OuterDiameterMeters = outerDiameter,
                 InnerDiameterMeters = innerDiameter
             };
+        }
+
+        /// <summary>
+        /// When import tessellates a circle into arcs, pick the longest arc per (center, radius) bucket
+        /// so OD / holes remain dimensionable.
+        /// </summary>
+        private static Edge[] RebuildClosedCirclesFromArcs(SmartDimHelper h, IView view, Edge[] edges)
+        {
+            var arcs = edges
+                .Where(e => h.IsCircular(e) && h.IsCircleProfileInView(e, view))
+                .ToArray();
+
+            if (arcs.Length == 0)
+                return Array.Empty<Edge>();
+
+            return arcs
+                .GroupBy(e =>
+                {
+                    double[] c = h.GetCircleCenter(e);
+                    double r = Math.Round(h.GetCircleRadius(e), 4);
+                    return (
+                        Math.Round(c[0], 3),
+                        Math.Round(c[1], 3),
+                        Math.Round(c[2], 3),
+                        r);
+                })
+                .Select(g => g.OrderByDescending(e => ArcSpanOrFull(h, e)).First())
+                .Where(e => ArcSpanOrFull(h, e) >= Math.PI * 0.5 || h.IsFullCircle(e))
+                .ToArray();
+        }
+
+        private static double ArcSpanOrFull(SmartDimHelper h, Edge edge)
+        {
+            if (h.IsFullCircle(edge))
+                return Math.PI * 2.0;
+
+            try
+            {
+                ICurve curve = (ICurve)edge.GetCurve();
+                double start = 0, end = 0;
+                bool isClosed = false, isPeriodic = false;
+                curve.GetEndParams(out start, out end, out isClosed, out isPeriodic);
+                return Math.Abs(end - start);
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         public static (Edge first, Edge second)? FindOppositeHoles(BoltCircleRing ring, SmartDimHelper h, IView view)
@@ -130,7 +200,6 @@ namespace SolidWorksTester.FlangeGasket
                     continue;
 
                 double midY = (polar[i].sheetY + polar[next].sheetY) / 2.0;
-                // Prefer near-equal spacing pairs near the top of the view.
                 bool better =
                     bestA == null ||
                     midY > bestMidY + 1e-6 ||

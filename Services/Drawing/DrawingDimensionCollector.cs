@@ -25,27 +25,26 @@ namespace SolidWorksTester.Services.Drawing
 
         private static void CollectFromView(IView view, string viewName, List<DrawingDimensionSample> list)
         {
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
+                DisplayDimension? display = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                Dimension? modelDim = display != null
+                    ? DrawingAnnotationWalk.GetModelDimension(display)
+                    : null;
+                if (display != null && modelDim != null)
                 {
-                    DisplayDimension? display = ann.GetSpecificAnnotation() as DisplayDimension;
-                    Dimension? modelDim = display?.GetDimension2(0) as Dimension;
-                    if (display != null && modelDim != null)
+                    double valueMeters = Math.Abs(modelDim.SystemValue);
+                    list.Add(new DrawingDimensionSample
                     {
-                        double valueMeters = Math.Abs(modelDim.SystemValue);
-                        list.Add(new DrawingDimensionSample
-                        {
-                            Type = display.Type2,
-                            ValueMm = Math.Round(valueMeters * 1000.0, 3),
-                            Prefix = display.GetText((int)swDimensionTextParts_e.swDimensionTextPrefix) ?? string.Empty,
-                            ViewName = viewName
-                        });
-                    }
+                        Type = display.Type2,
+                        ValueMm = Math.Round(valueMeters * 1000.0, 3),
+                        Prefix = display.GetText((int)swDimensionTextParts_e.swDimensionTextPrefix) ?? string.Empty,
+                        ViewName = viewName
+                    });
                 }
 
-                ann = ann.GetNext3() as Annotation;
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
     }

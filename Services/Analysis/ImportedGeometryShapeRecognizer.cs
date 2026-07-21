@@ -6,9 +6,6 @@ namespace SolidWorksTester.Services.Analysis
     /// <summary>Classifies imported solid geometry from bounding box and face statistics.</summary>
     internal static class ImportedGeometryShapeRecognizer
     {
-        private const double LargeCylinderRadiusMeters = 0.015;
-        private const double SmallCylinderRadiusMeters = 0.001;
-
         public sealed class ShapeRecognitionResult
         {
             public ImportedGeometryShapeKind Shape { get; init; }
@@ -23,6 +20,27 @@ namespace SolidWorksTester.Services.Analysis
             SolidBodyAnalysisResult bodyAnalysis)
         {
             var (s, m, l) = GetSortedBboxDimensions(partDoc);
+            return RecognizeFromBbox(bodyAnalysis, s, m, l);
+        }
+
+        /// <summary>Pure recognition entry for unit tests (no COM).</summary>
+        public static ShapeRecognitionResult RecognizeFromBbox(
+            SolidBodyAnalysisResult bodyAnalysis,
+            double s,
+            double m,
+            double l)
+        {
+            // Flat discs / flanges first — OD cylinders must not win as "tube".
+            if (IsFlatPlateLike(s, m, l))
+            {
+                return new ShapeRecognitionResult
+                {
+                    Shape = ImportedGeometryShapeKind.FlatPlateLike,
+                    BboxShortMeters = s,
+                    BboxMidMeters = m,
+                    BboxLongMeters = l
+                };
+            }
 
             bool trueTube = IsTrueCylindricalTube(bodyAnalysis, s, m, l);
             if (trueTube)
@@ -31,17 +49,6 @@ namespace SolidWorksTester.Services.Analysis
                 {
                     Shape = ImportedGeometryShapeKind.CylindricalLike,
                     IsTrueCylindricalTube = true,
-                    BboxShortMeters = s,
-                    BboxMidMeters = m,
-                    BboxLongMeters = l
-                };
-            }
-
-            if (IsFlatPlateLike(s, m, l))
-            {
-                return new ShapeRecognitionResult
-                {
-                    Shape = ImportedGeometryShapeKind.FlatPlateLike,
                     BboxShortMeters = s,
                     BboxMidMeters = m,
                     BboxLongMeters = l
@@ -91,9 +98,9 @@ namespace SolidWorksTester.Services.Analysis
         }
 
         /// <summary>
-        /// Strict tube/rod test — fillets and hole cylinders on brackets must not pass.
+        /// Strict tube/rod test — fillets, bolt holes, and flat discs must not pass.
         /// </summary>
-        private static bool IsTrueCylindricalTube(
+        internal static bool IsTrueCylindricalTube(
             SolidBodyAnalysisResult body,
             double s,
             double m,
@@ -102,11 +109,20 @@ namespace SolidWorksTester.Services.Analysis
             if (!body.IsCylindricalGeometry)
                 return false;
 
+            // Round flat stock (flange / blank) — never a tube.
+            if (IsFlatPlateLike(s, m, l))
+                return false;
+
             if (body.SolidBodyCount >= 2 && l / Math.Max(m, 0.0001) < 3.5)
                 return false;
 
             if (body.PlanarFaces > body.CylindricalFaces &&
                 body.SmallCylinderFaces >= body.LargeCylinderFaces)
+                return false;
+
+            // Short stub with plate-like aspect (L≈M) but slightly below FlatPlateLike threshold.
+            if (Math.Abs(l - m) / Math.Max(m, 1e-12) <= 0.25 &&
+                m / Math.Max(s, 1e-12) >= 3.0)
                 return false;
 
             if (l / Math.Max(m, 0.0001) < 2.0 && l / Math.Max(s, 0.0001) < 3.0)
@@ -152,7 +168,7 @@ namespace SolidWorksTester.Services.Analysis
             return (dims[0], dims[1], dims[2]);
         }
 
-        private static bool IsFlatPlateLike(double s, double m, double l)
+        internal static bool IsFlatPlateLike(double s, double m, double l)
         {
             const double minGauge = 0.0005;
             const double minFlatRatio = 4.0;

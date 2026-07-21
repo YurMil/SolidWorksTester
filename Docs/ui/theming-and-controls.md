@@ -26,6 +26,7 @@ Palette: neutral greys, primary accent, subtle card shadows,Segoe UI typography.
 | `ThemedTextField` | `UI/Controls/ThemedTextField.cs` | `UserControl` | Bordered text input |
 | `ThemedLogView` | `UI/Controls/ThemedLogView.cs` | `UserControl` | Read-only log surface |
 | `ThemedProgressBar` | `UI/Controls/ThemedProgressBar.cs` | `Control` | Custom-painted progress |
+| `TaskManagerView` | `UI/Controls/TaskManagerView.cs` | `UserControl` | Batch task grid (status / elapsed / stage) |
 | `InfoBanner` | `UI/Controls/InfoBanner.cs` | `Control` | Inline status banner |
 
 Custom properties that should not serialize in the designer use:

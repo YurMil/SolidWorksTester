@@ -14,12 +14,15 @@ namespace SolidWorksTester.Services.SolidWorks
         public Version InteropReferenceVersion { get; private init; } = new(32, 1, 0, 0);
         public Version? InstalledInteropFileVersion { get; private init; }
         public SolidWorksInstallInfo? SelectedInstall { get; private init; }
+        public SolidWorksInstallSelectionReason SelectionReason { get; private init; }
 
         public string Summary =>
             $"SOLIDWORKS {ProductYear} (API rev {RevisionNumber}, interop ref {InteropReferenceVersion}, " +
             $"installed interop {InstalledInteropFileVersion?.ToString() ?? "n/a"})";
 
-        public static void InitializeFromBootstrap(SolidWorksInstallInfo? bestInstall)
+        public static void InitializeFromBootstrap(
+            SolidWorksInstallInfo? bestInstall,
+            SolidWorksInstallSelectionReason reason = SolidWorksInstallSelectionReason.None)
         {
             Version interopRef = GetCompiledInteropVersion();
 
@@ -29,7 +32,8 @@ namespace SolidWorksTester.Services.SolidWorks
                 {
                     ProductYear = 2022,
                     InteropReferenceVersion = interopRef,
-                    SelectedInstall = null
+                    SelectedInstall = null,
+                    SelectionReason = SolidWorksInstallSelectionReason.None
                 };
                 return;
             }
@@ -40,24 +44,34 @@ namespace SolidWorksTester.Services.SolidWorks
                 InstallDirectory = bestInstall.InstallDirectory,
                 InstalledInteropFileVersion = bestInstall.InteropAssemblyVersion,
                 InteropReferenceVersion = interopRef,
-                SelectedInstall = bestInstall
+                SelectedInstall = bestInstall,
+                SelectionReason = reason
             };
         }
 
+        /// <summary>
+        /// Refines context from the live <c>RevisionNumber</c>. Product year always follows the running API;
+        /// install metadata is matched to that year (not the newest discovered install).
+        /// </summary>
         public static void UpdateFromRunningInstance(string revisionNumber, SolidWorksInstallInfo? installHint = null)
         {
-            int yearFromRevision = ParseYearFromRevision(revisionNumber);
-            int yearFromInstall = installHint?.Year ?? Current.ProductYear;
-            int productYear = Math.Max(yearFromRevision, yearFromInstall);
+            int productYear = ParseYearFromRevision(revisionNumber);
+
+            SolidWorksInstallInfo? matched = SolidWorksInstallDiscovery.FindByYear(productYear);
+            if (matched == null && installHint?.Year == productYear)
+                matched = installHint;
+            if (matched == null && Current.SelectedInstall?.Year == productYear)
+                matched = Current.SelectedInstall;
 
             Current = new SolidWorksVersionContext
             {
                 ProductYear = productYear,
                 RevisionNumber = revisionNumber,
-                InstallDirectory = installHint?.InstallDirectory ?? Current.InstallDirectory,
-                InstalledInteropFileVersion = installHint?.InteropAssemblyVersion ?? Current.InstalledInteropFileVersion,
+                InstallDirectory = matched?.InstallDirectory ?? string.Empty,
+                InstalledInteropFileVersion = matched?.InteropAssemblyVersion,
                 InteropReferenceVersion = Current.InteropReferenceVersion,
-                SelectedInstall = installHint ?? Current.SelectedInstall
+                SelectedInstall = matched,
+                SelectionReason = Current.SelectionReason
             };
         }
 

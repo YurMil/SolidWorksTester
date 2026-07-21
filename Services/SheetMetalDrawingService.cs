@@ -8,9 +8,15 @@ using SolidWorksTester.Services.Drawing.Routing;
 
 namespace SolidWorksTester.Services
 {
+    public enum ProcessPartOutcome
+    {
+        Completed = 0,
+        SkippedFastener = 1
+    }
+
     public sealed class SheetMetalDrawingService
     {
-        public void ProcessPart(ISldWorks swApp, string partPath, string templatePath, Action<string> log)
+        public ProcessPartOutcome ProcessPart(ISldWorks swApp, string partPath, string templatePath, Action<string> log)
         {
             if (!File.Exists(partPath))
                 throw new FileNotFoundException("Part file not found.", partPath);
@@ -33,6 +39,15 @@ namespace SolidWorksTester.Services
 
             PartAnalysisResult analysis = partTimer.Measure("part analysis", () =>
                 PartModelAnalyzer.Analyze(swApp, partPath, log));
+
+            if (analysis.IsFastener)
+            {
+                string reason = analysis.FastenerSkipReason ?? "DocumentType=Fastener";
+                log($"SKIP: fastener part ({reason}) — drawing not created.");
+                partTimer.Measure("close part (fastener skip)", () =>
+                    SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log));
+                return ProcessPartOutcome.SkippedFastener;
+            }
 
             string templateExt = Path.GetExtension(templatePath);
             if (templateExt.Equals(".DRWDOT", StringComparison.OrdinalIgnoreCase))
@@ -58,7 +73,7 @@ namespace SolidWorksTester.Services
                     SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log);
                 }
 
-                return;
+                return ProcessPartOutcome.Completed;
             }
 
             if (templateExt.Equals(".SLDDRW", StringComparison.OrdinalIgnoreCase))
@@ -75,6 +90,7 @@ namespace SolidWorksTester.Services
 
             partTimer.Measure("open and process drawing", () =>
                 OpenAndProcessDrawing(swApp, partPath, drawingPath, analysis, log));
+            return ProcessPartOutcome.Completed;
         }
 
         private static void OpenAndProcessDrawing(
