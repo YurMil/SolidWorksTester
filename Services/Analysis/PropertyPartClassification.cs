@@ -86,7 +86,12 @@ namespace SolidWorksTester.Services.Analysis
                 hasSubKind = true;
                 subKind = FlatPlateSubKind.BafflePlate;
                 if (origin == PropertyClassificationOrigin.None)
-                    origin = PropertyClassificationOrigin.EstConfigurationName;
+                {
+                    // Description-only hints are not EST Name catalog matches.
+                    origin = string.IsNullOrWhiteSpace(est.Name)
+                        ? PropertyClassificationOrigin.CadAsExplicit
+                        : PropertyClassificationOrigin.EstConfigurationName;
+                }
                 if (string.IsNullOrWhiteSpace(drawingProfile) ||
                     drawingProfile.Equals("plate", StringComparison.OrdinalIgnoreCase))
                     drawingProfile = "baffle_plate";
@@ -98,7 +103,11 @@ namespace SolidWorksTester.Services.Analysis
                 hasSubKind = true;
                 subKind = FlatPlateSubKind.FlangeGasket;
                 if (origin == PropertyClassificationOrigin.None)
-                    origin = PropertyClassificationOrigin.EstConfigurationName;
+                {
+                    origin = string.IsNullOrWhiteSpace(est.Name)
+                        ? PropertyClassificationOrigin.CadAsExplicit
+                        : PropertyClassificationOrigin.EstConfigurationName;
+                }
                 if (string.IsNullOrWhiteSpace(drawingProfile) ||
                     drawingProfile.Equals("plate", StringComparison.OrdinalIgnoreCase))
                     drawingProfile = "flange";

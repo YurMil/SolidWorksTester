@@ -187,7 +187,9 @@ namespace SolidWorksTester.Services.Analysis
                 }
             }
 
-            isHollow = pipeCount >= 2 && maxPipe - minPipe > 0.0005;
+            isHollow = pipeCount >= 2
+                       && maxPipe - minPipe > 0.0005
+                       && largeCylinderFaces >= 2;
             dominantSimilarSmallHoleCount = dominantSmall;
         }
     }

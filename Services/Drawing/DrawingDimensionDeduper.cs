@@ -139,13 +139,12 @@ namespace SolidWorksTester.Services.Drawing
         {
             var seenInView = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null)
                 {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-
                     if (IsNoiseDimension(displayDim, sheetMetalThicknessMeters))
                     {
                         toDelete.Add(ann);
@@ -175,7 +174,7 @@ namespace SolidWorksTester.Services.Drawing
                     }
                 }
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
 
@@ -191,7 +190,7 @@ namespace SolidWorksTester.Services.Drawing
 
             try
             {
-                Dimension? dim = displayDim.GetDimension2(0) as Dimension;
+                Dimension? dim = DrawingAnnotationWalk.GetModelDimension(displayDim);
                 if (dim == null)
                     return false;
 
@@ -249,7 +248,7 @@ namespace SolidWorksTester.Services.Drawing
 
             try
             {
-                Dimension? modelDim = displayDim.GetDimension2(0) as Dimension;
+                Dimension? modelDim = DrawingAnnotationWalk.GetModelDimension(displayDim);
                 if (modelDim == null)
                     return false;
 
@@ -343,37 +342,31 @@ namespace SolidWorksTester.Services.Drawing
 
         private static void CollectPlainDiameterKeys(IView view, HashSet<string> keys)
         {
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
-                {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    if (displayDim != null &&
-                        !HasQuantityPrefix(displayDim) &&
-                        TryGetDiameterKey(displayDim, out string key))
-                        keys.Add(key);
-                }
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null &&
+                    !HasQuantityPrefix(displayDim) &&
+                    TryGetDiameterKey(displayDim, out string key))
+                    keys.Add(key);
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
 
         private static void CollectQuantityDiameterKeys(IView view, HashSet<string> keys)
         {
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
-                {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    if (displayDim != null &&
-                        HasQuantityPrefix(displayDim) &&
-                        TryGetDiameterKey(displayDim, out string key))
-                        keys.Add(key);
-                }
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null &&
+                    HasQuantityPrefix(displayDim) &&
+                    TryGetDiameterKey(displayDim, out string key))
+                    keys.Add(key);
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
 
@@ -382,20 +375,17 @@ namespace SolidWorksTester.Services.Drawing
             HashSet<string> quantityDiameterKeys,
             List<IAnnotation> toDelete)
         {
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
-                {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    if (displayDim != null &&
-                        !HasQuantityPrefix(displayDim) &&
-                        TryGetDiameterKey(displayDim, out string key) &&
-                        quantityDiameterKeys.Contains(key))
-                        toDelete.Add(ann);
-                }
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null &&
+                    !HasQuantityPrefix(displayDim) &&
+                    TryGetDiameterKey(displayDim, out string key) &&
+                    quantityDiameterKeys.Contains(key))
+                    toDelete.Add(ann);
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
 
@@ -404,20 +394,17 @@ namespace SolidWorksTester.Services.Drawing
             HashSet<string> plainDiameterKeys,
             List<IAnnotation> toDelete)
         {
-            Annotation? ann = view.GetFirstAnnotation3();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
             while (ann != null)
             {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
-                {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    if (displayDim != null &&
-                        HasQuantityPrefix(displayDim) &&
-                        TryGetDiameterKey(displayDim, out string key) &&
-                        plainDiameterKeys.Contains(key))
-                        toDelete.Add(ann);
-                }
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null &&
+                    HasQuantityPrefix(displayDim) &&
+                    TryGetDiameterKey(displayDim, out string key) &&
+                    plainDiameterKeys.Contains(key))
+                    toDelete.Add(ann);
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
 
@@ -439,7 +426,7 @@ namespace SolidWorksTester.Services.Drawing
             key = string.Empty;
             try
             {
-                Dimension? dim = displayDim.GetDimension2(0) as Dimension;
+                Dimension? dim = DrawingAnnotationWalk.GetModelDimension(displayDim);
                 if (dim == null)
                     return false;
 
@@ -475,7 +462,7 @@ namespace SolidWorksTester.Services.Drawing
             {
                 try
                 {
-                    Dimension? dim = displayDim.GetDimension2(0) as Dimension;
+                    Dimension? dim = DrawingAnnotationWalk.GetModelDimension(displayDim);
                     if (dim != null)
                     {
                         double value = Math.Abs(dim.SystemValue);

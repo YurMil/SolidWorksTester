@@ -12,16 +12,16 @@ sequenceDiagram
     participant SW as SOLIDWORKS COM
     participant Service as SheetMetalDrawingService
 
-    User->>MainForm: Generate
-    MainForm->>Worker: RunBatchAsync
+    User->>MainForm: Generate / Retry
+    MainForm->>Worker: RunBatchAsync (Pending or selected retry set)
     Worker->>SW: SolidWorksConnection.Connect
-    loop Each .SLDPRT
-        Worker->>Service: ProcessPart(swApp, part, template, log)
+    loop Each BatchTaskItem
+        Worker->>Service: ProcessPart(swApp, part, template, taskLog)
         Service->>SW: Analyze part (open/close)
         Service->>SW: NewDocument or OpenDoc drawing
         Service->>SW: Pipeline Process
         Service->>SW: SaveAs .SLDDRW
-        Worker->>MainForm: AppendLog / UpdateProgress
+        Worker->>MainForm: task status / event log / progress
     end
     Worker->>MainForm: Finished message
 ```

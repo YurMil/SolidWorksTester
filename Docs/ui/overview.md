@@ -23,17 +23,22 @@ WinForms desktop shell for batch drawing generation. No WPF or third-party UI fr
 ```
 Form (MainForm)
 └── TableLayoutPanel root
-    ├── Header — title + subtitle
+    ├── Header — title
+    ├── InfoBanner — disclaimer
     ├── Card — template path (ThemedTextField)
-    ├── Card — part list (ListBox) + side buttons (TableLayoutPanel)
-    ├── Card — log (ThemedLogView) + progress
-    ├── Action row — Generate / Cancel (TableLayoutPanel)
-    └── Footer — author + version link (opens release notes)
+    ├── Card — Tasks (TaskManagerView ListView) + side buttons
+    │         Add files / folder / Remove / Clear / Skip / Retry
+    ├── Action row — Generate / Cancel + progress
+    ├── Card — Event log (selected task or session)
+    └── Footer — author + version link
 ```
+
+**Task manager:** one row per `.SLDPRT` with Status, Attempt, Start, Elapsed (+ progress bar), Stage.  
+Selecting a row shows that file’s event log (including `[time]` stages). Skip marks Pending tasks; Retry re-runs Failed/Skipped/Cancelled.
 
 Side and action buttons use **TableLayoutPanel** with percent column widths so controls **do not overlap** on resize.
 
-Minimum window size: approximately **720 × 640**.
+Minimum window size is measured from the live layout (see `FormWindowConstraints`).
 
 ---
 

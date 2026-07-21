@@ -32,24 +32,43 @@ namespace SolidWorksTester.UI.Layout
             CreateHeader(root);
             CreateDisclaimer(root);
             ThemedTextField field = CreateTemplateSection(root, toolTip);
-            var (partsListBox, partsCountLabel) = CreatePartsSection(root);
+            TasksSection tasks = CreateTasksSection(root);
             var (runButton, cancelButton, statusLabel, progressBar) = CreateActionSection(root);
-            var logView = CreateLogSection(root);
+            var (eventLogHeader, logView) = CreateLogSection(root);
             var (footerAuthor, footerVersionLink) = CreateFooterSection(root);
 
             return new MainFormView
             {
                 TemplateTextBox = field.Inner,
-                PartsListBox = partsListBox,
-                PartsCountLabel = partsCountLabel,
+                TaskManager = tasks.Manager,
+                TasksCountLabel = tasks.CountLabel,
+                AddFilesButton = tasks.AddFiles,
+                AddFolderButton = tasks.AddFolder,
+                RemoveButton = tasks.Remove,
+                ClearButton = tasks.Clear,
+                SkipButton = tasks.Skip,
+                RetryButton = tasks.Retry,
                 RunButton = runButton,
                 CancelButton = cancelButton,
                 StatusLabel = statusLabel,
                 ProgressBar = progressBar,
+                EventLogHeader = eventLogHeader,
                 LogTextBox = logView.Inner,
                 FooterAuthorLabel = footerAuthor,
                 FooterVersionLink = footerVersionLink
             };
+        }
+
+        private sealed class TasksSection
+        {
+            public required TaskManagerView Manager { get; init; }
+            public required Label CountLabel { get; init; }
+            public required ThemedButton AddFiles { get; init; }
+            public required ThemedButton AddFolder { get; init; }
+            public required ThemedButton Remove { get; init; }
+            public required ThemedButton Clear { get; init; }
+            public required ThemedButton Skip { get; init; }
+            public required ThemedButton Retry { get; init; }
         }
 
         private static TableLayoutPanel CreateRootPanel()
@@ -63,11 +82,6 @@ namespace SolidWorksTester.UI.Layout
                 BackColor = UiTheme.AppBackground
             };
 
-            // Title / banner / template / action / footer size themselves from their content, so
-            // they stay correct at any DPI or font scale — a pixel constant here silently clips
-            // the section it is too small for. Only the parts list and the log compete for the
-            // leftover space, split by percent; their cards carry MinimumSize, and the form's
-            // minimum size is derived from this panel's preferred size (see FormWindowConstraints).
             const float partsRowMin = UiTheme.PartsCardMinHeight + UiTheme.SectionGap;
             const float logRowMin = UiTheme.LogCardMinHeight + UiTheme.SectionGap;
             const float partsPercent = partsRowMin / (partsRowMin + logRowMin) * 100F;
@@ -159,7 +173,6 @@ namespace SolidWorksTester.UI.Layout
             };
             browse.Click += (_, _) => BrowseTemplate(field.Inner, toolTip, field);
 
-            // Fill first, fixed-width browse on the right — browse never clips or overlaps.
             fieldRow.Controls.Add(field);
             fieldRow.Controls.Add(browse);
 
@@ -172,7 +185,7 @@ namespace SolidWorksTester.UI.Layout
             return field;
         }
 
-        private static (ListBox list, Label countLabel) CreatePartsSection(TableLayoutPanel root)
+        private static TasksSection CreateTasksSection(TableLayoutPanel root)
         {
             var card = new ThemedCard
             {
@@ -192,7 +205,23 @@ namespace SolidWorksTester.UI.Layout
             outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var header = UiControlHelper.CreateSectionLabel("Part files");
+            var header = UiControlHelper.CreateSectionLabel("Tasks");
+            var caption = UiControlHelper.CreateCaptionLabel(
+                "Queue, status, elapsed time, and stage per part file");
+
+            var headerBlock = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent
+            };
+            headerBlock.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            headerBlock.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            headerBlock.Controls.Add(header, 0, 0);
+            headerBlock.Controls.Add(caption, 0, 1);
 
             var body = new Panel
             {
@@ -201,7 +230,7 @@ namespace SolidWorksTester.UI.Layout
                 Margin = new Padding(0, 6, 0, 0),
                 MinimumSize = new Size(
                     UiTheme.PartsBodyMinWidth,
-                    UiTheme.ControlHeight * 2 + UiTheme.ButtonGap + 8)
+                    UiTheme.ControlHeight * 3 + UiTheme.ButtonGap * 2 + 8)
             };
 
             var listHost = new Panel
@@ -210,7 +239,7 @@ namespace SolidWorksTester.UI.Layout
                 BackColor = UiTheme.SurfaceMuted,
                 Padding = new Padding(1),
                 Margin = new Padding(0, 0, 12, 0),
-                MinimumSize = new Size(180, 80)
+                MinimumSize = new Size(220, 100)
             };
             UiControlHelper.EnableDoubleBuffer(listHost);
             listHost.Paint += (_, e) =>
@@ -219,33 +248,22 @@ namespace SolidWorksTester.UI.Layout
                 e.Graphics.DrawRectangle(pen, 0, 0, listHost.Width - 1, listHost.Height - 1);
             };
 
-            var partsListBox = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                SelectionMode = SelectionMode.MultiExtended,
-                HorizontalScrollbar = true,
-                IntegralHeight = false,
-                BorderStyle = BorderStyle.None,
-                BackColor = UiTheme.Surface,
-                ForeColor = UiTheme.TextPrimary,
-                Font = UiTheme.AppFont
-            };
+            var taskManager = new TaskManagerView { Dock = DockStyle.Fill };
 
-            var partsCountLabel = new Label
+            var tasksCountLabel = new Label
             {
-                Text = "0 parts selected",
+                Text = "0 tasks",
                 AutoSize = true,
                 ForeColor = UiTheme.TextMuted,
                 Font = UiTheme.CaptionFont,
                 Margin = new Padding(0, 8, 0, 0)
             };
 
-            partsListBox.SelectedIndexChanged += (_, _) =>
-                UpdatePartsCountLabel(partsListBox, partsCountLabel);
+            taskManager.TasksChanged += (_, _) => UpdateTasksCountLabel(taskManager, tasksCountLabel);
+            taskManager.SelectionChanged += (_, _) => UpdateTasksCountLabel(taskManager, tasksCountLabel);
 
-            listHost.Controls.Add(partsListBox);
+            listHost.Controls.Add(taskManager);
 
-            // Host fills the right column; the grid inside sits at its top.
             var sideButtonHost = new Panel
             {
                 Dock = DockStyle.Right,
@@ -253,68 +271,111 @@ namespace SolidWorksTester.UI.Layout
                 BackColor = Color.Transparent
             };
 
-            var sideButtons = CreatePartButtonsPanel(partsListBox, partsCountLabel);
-            sideButtons.Dock = DockStyle.Top;
-            sideButtons.Height = UiTheme.ControlHeight * 2 + UiTheme.ButtonGap;
-            sideButtonHost.Controls.Add(sideButtons);
+            var side = CreateTaskButtonsPanel(taskManager, tasksCountLabel);
+            side.Panel.Dock = DockStyle.Top;
+            side.Panel.Height = UiTheme.ControlHeight * 3 + UiTheme.ButtonGap * 2;
+            sideButtonHost.Controls.Add(side.Panel);
 
             body.Controls.Add(listHost);
             body.Controls.Add(sideButtonHost);
 
-            outer.Controls.Add(header, 0, 0);
+            outer.Controls.Add(headerBlock, 0, 0);
             outer.Controls.Add(body, 0, 1);
-            outer.Controls.Add(partsCountLabel, 0, 2);
+            outer.Controls.Add(tasksCountLabel, 0, 2);
             card.Controls.Add(outer);
             root.Controls.Add(card, 0, 3);
 
-            return (partsListBox, partsCountLabel);
+            return new TasksSection
+            {
+                Manager = taskManager,
+                CountLabel = tasksCountLabel,
+                AddFiles = side.AddFiles,
+                AddFolder = side.AddFolder,
+                Remove = side.Remove,
+                Clear = side.Clear,
+                Skip = side.Skip,
+                Retry = side.Retry
+            };
         }
 
-        /// <summary>
-        /// 2x2 grid (rather than a 4-tall single column) so the parts card's minimum height
-        /// stays small enough to fit comfortably on compact displays. Rows are fixed-height and
-        /// the grid is top-aligned, so the buttons stay together instead of drifting apart as
-        /// the window grows — the spare vertical space belongs to the list beside them.
-        /// </summary>
-        private static Control CreatePartButtonsPanel(ListBox partsListBox, Label partsCountLabel)
+        private sealed class TaskButtons
+        {
+            public required Control Panel { get; init; }
+            public required ThemedButton AddFiles { get; init; }
+            public required ThemedButton AddFolder { get; init; }
+            public required ThemedButton Remove { get; init; }
+            public required ThemedButton Clear { get; init; }
+            public required ThemedButton Skip { get; init; }
+            public required ThemedButton Retry { get; init; }
+        }
+
+        private static TaskButtons CreateTaskButtonsPanel(TaskManagerView taskManager, Label countLabel)
         {
             var panel = new TableLayoutPanel
             {
                 ColumnCount = 2,
-                RowCount = 2,
+                RowCount = 3,
                 BackColor = Color.Transparent,
                 Margin = new Padding(0),
                 MinimumSize = new Size(
                     UiTheme.SideButtonColumnMinWidth * 2 + UiTheme.ButtonGap,
-                    UiTheme.ControlHeight * 2 + UiTheme.ButtonGap)
+                    UiTheme.ControlHeight * 3 + UiTheme.ButtonGap * 2)
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight + UiTheme.ButtonGap));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight + UiTheme.ButtonGap));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.ControlHeight));
 
             var addFiles = CreateSideButton("Add files", right: true, bottom: true);
-            addFiles.Click += (_, _) => AddPartFiles(partsListBox, partsCountLabel);
+            addFiles.Click += (_, _) =>
+            {
+                AddPartFiles(taskManager);
+                UpdateTasksCountLabel(taskManager, countLabel);
+            };
 
             var addFolder = CreateSideButton("Add folder", right: false, bottom: true);
-            addFolder.Click += (_, _) => AddPartFolder(partsListBox, partsCountLabel);
+            addFolder.Click += (_, _) =>
+            {
+                AddPartFolder(taskManager);
+                UpdateTasksCountLabel(taskManager, countLabel);
+            };
 
-            var remove = CreateSideButton("Remove", right: true, bottom: false);
-            remove.Click += (_, _) => RemoveSelectedParts(partsListBox, partsCountLabel);
+            var remove = CreateSideButton("Remove", right: true, bottom: true);
+            remove.Click += (_, _) =>
+            {
+                taskManager.RemoveSelected();
+                UpdateTasksCountLabel(taskManager, countLabel);
+            };
 
-            var clear = CreateSideButton("Clear all", right: false, bottom: false);
+            var clear = CreateSideButton("Clear all", right: false, bottom: true);
             clear.Click += (_, _) =>
             {
-                partsListBox.Items.Clear();
-                UpdatePartsCountLabel(partsListBox, partsCountLabel);
+                taskManager.ClearTasks();
+                UpdateTasksCountLabel(taskManager, countLabel);
             };
+
+            var skip = CreateSideButton("Skip", right: true, bottom: false);
+            var retry = CreateSideButton("Retry", right: false, bottom: false);
 
             panel.Controls.Add(addFiles, 0, 0);
             panel.Controls.Add(addFolder, 1, 0);
             panel.Controls.Add(remove, 0, 1);
             panel.Controls.Add(clear, 1, 1);
-            return panel;
+            panel.Controls.Add(skip, 0, 2);
+            panel.Controls.Add(retry, 1, 2);
+
+            return new TaskButtons
+            {
+                Panel = panel,
+                AddFiles = addFiles,
+                AddFolder = addFolder,
+                Remove = remove,
+                Clear = clear,
+                Skip = skip,
+                Retry = retry
+            };
         }
 
         private static ThemedButton CreateSideButton(string text, bool right, bool bottom) =>
@@ -406,7 +467,7 @@ namespace SolidWorksTester.UI.Layout
             return (runButton, cancelButton, statusLabel, progressBar);
         }
 
-        private static ThemedLogView CreateLogSection(TableLayoutPanel root)
+        private static (Label header, ThemedLogView log) CreateLogSection(TableLayoutPanel root)
         {
             var card = new ThemedCard
             {
@@ -426,7 +487,7 @@ namespace SolidWorksTester.UI.Layout
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-            var header = UiControlHelper.CreateSectionLabel("Log");
+            var header = UiControlHelper.CreateSectionLabel("Event log");
             header.Margin = new Padding(0, 0, 0, 8);
 
             var logView = new ThemedLogView { Dock = DockStyle.Fill };
@@ -436,13 +497,11 @@ namespace SolidWorksTester.UI.Layout
             card.Controls.Add(layout);
             root.Controls.Add(card, 0, 5);
 
-            return logView;
+            return (header, logView);
         }
 
         private static (Label author, LinkLabel versionLink) CreateFooterSection(TableLayoutPanel root)
         {
-            // Anchored columns rather than hand-placed Locations, so the version link tracks the
-            // right edge on its own and the row height follows the caption font at any DPI.
             var footer = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -494,10 +553,12 @@ namespace SolidWorksTester.UI.Layout
             return (authorLabel, versionLink);
         }
 
-        private static void UpdatePartsCountLabel(ListBox listBox, Label countLabel)
+        private static void UpdateTasksCountLabel(TaskManagerView manager, Label countLabel)
         {
-            int count = listBox.Items.Count;
-            countLabel.Text = count == 1 ? "1 part selected" : $"{count} parts selected";
+            int count = manager.TaskCount;
+            int selected = manager.SelectedTasks.Count;
+            string baseText = count == 1 ? "1 task" : $"{count} tasks";
+            countLabel.Text = selected > 0 ? $"{baseText} · {selected} selected" : baseText;
         }
 
         private static void BrowseTemplate(TextBox templateTextBox, ToolTip toolTip, ThemedTextField field)
@@ -528,7 +589,7 @@ namespace SolidWorksTester.UI.Layout
             return Directory.Exists(dir) ? dir : null;
         }
 
-        private static void AddPartFiles(ListBox partsListBox, Label partsCountLabel)
+        private static void AddPartFiles(TaskManagerView taskManager)
         {
             using var dialog = new OpenFileDialog
             {
@@ -541,11 +602,10 @@ namespace SolidWorksTester.UI.Layout
             if (dialog.ShowDialog() != DialogResult.OK)
                 return;
 
-            AddUniquePaths(partsListBox, dialog.FileNames);
-            UpdatePartsCountLabel(partsListBox, partsCountLabel);
+            taskManager.AddPaths(dialog.FileNames);
         }
 
-        private static void AddPartFolder(ListBox partsListBox, Label partsCountLabel)
+        private static void AddPartFolder(TaskManagerView taskManager)
         {
             using var dialog = new FolderBrowserDialog
             {
@@ -557,26 +617,7 @@ namespace SolidWorksTester.UI.Layout
                 return;
 
             string[] files = Directory.GetFiles(dialog.SelectedPath, "*.SLDPRT", SearchOption.AllDirectories);
-            AddUniquePaths(partsListBox, files);
-            UpdatePartsCountLabel(partsListBox, partsCountLabel);
-        }
-
-        private static void RemoveSelectedParts(ListBox partsListBox, Label partsCountLabel)
-        {
-            foreach (object item in partsListBox.SelectedItems.Cast<object>().ToList())
-                partsListBox.Items.Remove(item);
-
-            UpdatePartsCountLabel(partsListBox, partsCountLabel);
-        }
-
-        private static void AddUniquePaths(ListBox partsListBox, IEnumerable<string> paths)
-        {
-            var existing = partsListBox.Items.Cast<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (string path in paths.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
-            {
-                if (existing.Add(path))
-                    partsListBox.Items.Add(path);
-            }
+            taskManager.AddPaths(files);
         }
     }
 }

@@ -19,12 +19,21 @@ The application must run on different SOLIDWORKS installations without rebuildin
 flowchart TD
     A[Program.Main] --> B[SolidWorksBootstrap.Initialize]
     B --> C[Discover installs 2022-2026]
-    C --> D[Set SolidWorksVersionContext]
-    D --> E[MainForm batch]
-    E --> F[SolidWorksConnection.Connect]
-    F --> G[Update context from RevisionNumber]
-    G --> H[SolidWorksCapabilityRouter selects algorithms]
+    C --> D[Prefer Windows COM default SldWorks.Application]
+    D --> E[Else newest install]
+    E --> F[Set SolidWorksVersionContext]
+    F --> G[MainForm batch]
+    G --> H[SolidWorksConnection.Connect]
+    H --> I[Update context from RevisionNumber only]
+    I --> J[SolidWorksCapabilityRouter selects algorithms]
 ```
+
+## Selection priority
+
+1. **Windows COM default** — folder of `SldWorks.Application` → `LocalServer32` (`SLDWORKS.exe`). This is what `Activator.CreateInstance(ProgID)` launches when no instance is running.
+2. **Newest installed** — only if the COM default path cannot be matched to a discovered install.
+
+After connect, **product year always follows** `ISldWorks.RevisionNumber()` (e.g. `32.5.0` → 2024). The bootstrap “selected” year is only a pre-connect hint for logging / AssemblyResolve.
 
 ---
 

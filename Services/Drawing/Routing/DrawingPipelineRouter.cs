@@ -126,7 +126,13 @@ namespace SolidWorksTester.Services.Drawing.Routing
 
             if (analysis.KindSource == ClassificationSource.CustomProperty)
             {
-                return analysis.PropertyOrigin == PropertyClassificationOrigin.EstConfigurationName
+                // Empty EST Name + Description "…FLANGE…" is not a catalog hit.
+                bool hasCatalogIdentity =
+                    !string.IsNullOrWhiteSpace(analysis.EstNameCatalogId) ||
+                    (analysis.PropertyOrigin == PropertyClassificationOrigin.EstConfigurationName &&
+                     !string.IsNullOrWhiteSpace(analysis.EstProperties?.Name));
+
+                return hasCatalogIdentity
                     ? DrawingRouteSource.EstNameCatalog
                     : DrawingRouteSource.ExplicitProfile;
             }

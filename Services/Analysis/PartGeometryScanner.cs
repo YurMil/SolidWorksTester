@@ -55,6 +55,11 @@ namespace SolidWorksTester.Services.Analysis
             "MBimport", "BodyFeature", "SolidBody", "ImportSolid", "ImpOrphan"
         };
 
+        private static readonly string[] ImportFileExtensions =
+        {
+            ".STEP", ".STP", ".IGS", ".IGES", ".X_T", ".X_B", ".SAT", ".PARASOLID", ".VDA", ".JT"
+        };
+
         private static readonly HashSet<string> NativeSolidFeatureTypes = new(StringComparer.OrdinalIgnoreCase)
         {
             "Boss", "BossExtrude", "BossThin", "Cut", "CutExtrude", "CutThin",
@@ -331,7 +336,13 @@ namespace SolidWorksTester.Services.Analysis
             if (ImportFeatureTypes.Contains(typeName))
                 return true;
 
+            if (typeName.StartsWith("Ice", StringComparison.OrdinalIgnoreCase))
+                return true;
+
             if (featName.StartsWith("Imported", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (FeatureNameLooksLikeForeignCad(featName))
                 return true;
 
             try
@@ -342,6 +353,21 @@ namespace SolidWorksTester.Services.Analysis
             catch
             {
                 // ignore COM failures on older features
+            }
+
+            return false;
+        }
+
+        private static bool FeatureNameLooksLikeForeignCad(string featName)
+        {
+            if (string.IsNullOrWhiteSpace(featName))
+                return false;
+
+            string upper = featName.ToUpperInvariant();
+            foreach (string ext in ImportFileExtensions)
+            {
+                if (upper.Contains(ext))
+                    return true;
             }
 
             return false;

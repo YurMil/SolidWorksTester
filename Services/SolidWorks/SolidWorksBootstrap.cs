@@ -28,8 +28,8 @@ namespace SolidWorksTester.Services.SolidWorks
 
                 AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
                 _installs = SolidWorksInstallDiscovery.DiscoverAll();
-                SolidWorksInstallInfo? best = _installs.FirstOrDefault();
-                SolidWorksVersionContext.InitializeFromBootstrap(best);
+                SolidWorksInstallInfo? best = SolidWorksInstallDiscovery.DiscoverBest(out SolidWorksInstallSelectionReason reason);
+                SolidWorksVersionContext.InitializeFromBootstrap(best, reason);
                 _initialized = true;
             }
         }
@@ -58,8 +58,19 @@ namespace SolidWorksTester.Services.SolidWorks
                 return false;
             }
 
-            SolidWorksInstallInfo selected = _installs[0];
+            SolidWorksInstallInfo? selected = SolidWorksVersionContext.Current.SelectedInstall ?? _installs[0];
+            string reason = SolidWorksInstallDiscovery.FormatSelectionReason(
+                SolidWorksVersionContext.Current.SelectionReason);
+
             sb.AppendLine($"  Selected for routing: {selected.DisplayName}");
+            sb.AppendLine($"  Selection reason: {reason}");
+            if (!string.IsNullOrWhiteSpace(selected.InstallDirectory))
+                sb.AppendLine($"  Selected install path: {selected.InstallDirectory}");
+
+            string? comDefault = SolidWorksInstallDiscovery.TryGetComDefaultInstallDirectory();
+            if (!string.IsNullOrWhiteSpace(comDefault))
+                sb.AppendLine($"  Windows COM default path: {comDefault}");
+
             sb.AppendLine($"  Strategy: {SolidWorksCapabilityRouter.GetStrategyNotes()}");
 
             userMessage = string.Empty;
@@ -75,7 +86,11 @@ namespace SolidWorksTester.Services.SolidWorks
                 if (simpleName is not ("SolidWorks.Interop.sldworks" or "SolidWorks.Interop.swconst"))
                     return null;
 
-                SolidWorksInstallInfo? install = _installs.FirstOrDefault();
+                SolidWorksInstallInfo? install =
+                    SolidWorksVersionContext.Current.SelectedInstall
+                    ?? _installs.FirstOrDefault(i => i.Year == SolidWorksVersionContext.Current.ProductYear)
+                    ?? _installs.FirstOrDefault();
+
                 if (install == null)
                     return null;
 

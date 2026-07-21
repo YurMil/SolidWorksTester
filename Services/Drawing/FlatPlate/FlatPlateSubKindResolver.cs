@@ -1,3 +1,4 @@
+using System;
 using SolidWorks.Interop.sldworks;
 using SolidWorksTester.ArcSector;
 using SolidWorksTester.FlangeGasket;
@@ -204,6 +205,10 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                     if (discView == null && FlangeGasketViewAnalyzer.DetectFromDrawing(dimHelper, drawing))
                         discView = FlangeGasketViewAnalyzer.FindPrimaryDiscView(dimHelper, drawing);
 
+                    // Imported STEP: face detection may fail before IsFullCircle softens — pick largest
+                    // near-square orthographic outline as the disc face.
+                    discView ??= FindLargestNearSquareOrthographicView(drawing);
+
                     return new FlatPlateDimContext
                     {
                         SubKind = FlatPlateSubKind.FlangeGasket,
@@ -253,5 +258,40 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
                 "Arc-sector plate mode: R_in/R_out, angle or radial strip, bbox, hole Ø + 2 coords, thickness.",
             _ => "Generic flat plate mode: overall, thickness, holes."
         };
+
+        private static IView? FindLargestNearSquareOrthographicView(IDrawingDoc drawing)
+        {
+            IView? best = null;
+            double bestArea = 0;
+
+            IView? view = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
+            while (view != null)
+            {
+                string name = view.GetName2();
+                if (!name.Equals(SmartDimConstants.IsometricViewName, StringComparison.OrdinalIgnoreCase) &&
+                    view.GetOutline() is double[] outline && outline.Length >= 4)
+                {
+                    double w = Math.Abs(outline[2] - outline[0]);
+                    double ht = Math.Abs(outline[3] - outline[1]);
+                    if (w > 1e-6 && ht > 1e-6)
+                    {
+                        double aspect = Math.Max(w, ht) / Math.Min(w, ht);
+                        if (aspect <= 1.35)
+                        {
+                            double area = w * ht;
+                            if (area > bestArea)
+                            {
+                                bestArea = area;
+                                best = view;
+                            }
+                        }
+                    }
+                }
+
+                view = view.GetNextView() as IView;
+            }
+
+            return best;
+        }
     }
 }

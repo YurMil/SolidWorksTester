@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using SolidWorksTester.Services.Drawing;
 using SolidWorksTester.SmartDim;
 
 namespace SolidWorksTester
@@ -11,7 +13,13 @@ namespace SolidWorksTester
     public partial class SmartDimHelper
     {
         private static readonly Regex QuantityPrefixRegex =
-            new(@"^\d+\s*[x×]\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            new(@"^\s*\d+\s*[x×]\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private HashSet<long>? _drawingDimValueCache;
+        private const int MaxAnnotationsPerView = 400;
+
+        /// <summary>Drop cached dimension values (call after import / create / delete).</summary>
+        public void InvalidateDimensionValueCache() => _drawingDimValueCache = null;
 
         /// <summary>True when the view already contains a display dimension with the given value.</summary>
         public bool HasDimensionWithValue(
@@ -37,20 +45,68 @@ namespace SolidWorksTester
 
         /// <summary>
         /// True when any orthographic view (except isometric) already has the given dimension value.
+        /// Uses a one-shot value cache so repeated probes after model-import stay fast.
         /// </summary>
         public bool HasDimensionWithValueInDrawing(
             double valueMeters,
             int? dimType = null,
             double tol = SmartDimConstants.DimensionValueToleranceMeters)
         {
-            foreach (IView view in EnumerateDrawingViews(skipIsometric: true))
+            // Typed lookups still need a walk; untyped value checks use the cache.
+            if (dimType != null)
             {
-                if (HasDimensionWithValue(view, valueMeters, dimType, tol))
+                foreach (IView view in EnumerateDrawingViews(skipIsometric: true))
+                {
+                    if (HasDimensionWithValue(view, valueMeters, dimType, tol))
+                        return true;
+                }
+
+                return false;
+            }
+
+            EnsureDrawingDimValueCache();
+            long key = QuantizeDimMeters(valueMeters);
+            // Also probe neighbors within ~tol (0.01 mm steps around target).
+            long tolSteps = Math.Max(1, (long)Math.Ceiling(tol / 1e-5));
+            for (long d = -tolSteps; d <= tolSteps; d++)
+            {
+                if (_drawingDimValueCache!.Contains(key + d))
                     return true;
             }
 
             return false;
         }
+
+        private void EnsureDrawingDimValueCache()
+        {
+            if (_drawingDimValueCache != null)
+                return;
+
+            var cache = new HashSet<long>();
+            foreach (IView view in EnumerateDrawingViews(skipIsometric: true))
+            {
+                foreach (DisplayDimensionEntry entry in EnumerateDisplayDimensions(view))
+                {
+                    if (entry.ModelDimension == null)
+                        continue;
+
+                    try
+                    {
+                        cache.Add(QuantizeDimMeters(entry.ModelDimension.SystemValue));
+                    }
+                    catch
+                    {
+                        // skip broken COM dim
+                    }
+                }
+            }
+
+            _drawingDimValueCache = cache;
+        }
+
+        /// <summary>Quantize meters to 0.01 mm units for set membership.</summary>
+        private static long QuantizeDimMeters(double meters) =>
+            (long)Math.Round(Math.Abs(meters) * 1e5);
 
         private static bool MatchesDiameterValue(DisplayDimensionEntry entry, double diameterMeters)
         {
@@ -83,19 +139,25 @@ namespace SolidWorksTester
 
         private IEnumerable<DisplayDimensionEntry> EnumerateDisplayDimensions(IView view)
         {
-            Annotation? ann = view.GetFirstAnnotation3();
-            while (ann != null)
-            {
-                if (ann.GetType() == (int)swAnnotationType_e.swDisplayDimension)
-                {
-                    DisplayDimension? displayDim = ann.GetSpecificAnnotation() as DisplayDimension;
-                    Dimension? modelDim = displayDim?.GetDimension2(0) as Dimension;
+            var visited = new HashSet<int>();
+            Annotation? ann = DrawingAnnotationWalk.GetFirst(view);
+            int count = 0;
 
-                    if (displayDim != null)
-                        yield return new DisplayDimensionEntry(ann, displayDim, modelDim);
+            while (ann != null && count < MaxAnnotationsPerView)
+            {
+                count++;
+                int id = RuntimeHelpers.GetHashCode(ann);
+                if (!visited.Add(id))
+                    yield break; // cyclic COM walk — abort
+
+                DisplayDimension? displayDim = DrawingAnnotationWalk.AsDisplayDimension(ann);
+                if (displayDim != null)
+                {
+                    Dimension? modelDim = DrawingAnnotationWalk.GetModelDimension(displayDim);
+                    yield return new DisplayDimensionEntry(ann, displayDim, modelDim);
                 }
 
-                ann = ann.GetNext3();
+                ann = DrawingAnnotationWalk.GetNext(ann);
             }
         }
 
