@@ -13,10 +13,12 @@ namespace SolidWorksTester.Services.Analysis.FlangeGasket
 
         public static bool IsFlangeOrGasket(PartGeometrySnapshot snap)
         {
+            // Thick PN flanges: flat ratio can be ~4–5 (e.g. Ø1250 × 92 mm).
             if (!snap.HasHoles ||
-                !snap.IsDiscLikeBbox(minThickness: 0.0005, minFlatRatio: 5.0, roundTolerance: 0.08))
+                !snap.IsDiscLikeBbox(minThickness: 0.0005, minFlatRatio: 4.0, roundTolerance: 0.10))
                 return false;
 
+            // Dense hole arrays belong to baffle / tube-sheet, not bolt-circle flanges.
             if (snap.DominantSimilarSmallHoleCount >= PartGeometrySnapshot.MinDenseHoleCount)
                 return false;
 

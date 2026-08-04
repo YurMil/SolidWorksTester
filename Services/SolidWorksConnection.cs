@@ -71,8 +71,9 @@ namespace SolidWorksTester.Services
             try
             {
                 string revision = swApp.RevisionNumber();
-                SolidWorksInstallInfo? install = SolidWorksInstallDiscovery.DiscoverBest();
-                SolidWorksVersionContext.UpdateFromRunningInstance(revision, install);
+                // Year comes from the live API revision; match install folder for that year only
+                // (do not pass DiscoverBest — that may be a newer install than the one Windows launched).
+                SolidWorksVersionContext.UpdateFromRunningInstance(revision);
                 Write(SolidWorksVersionContext.Current.Summary);
                 Write(SolidWorksCapabilityRouter.GetStrategyNotes());
             }

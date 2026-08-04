@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using SolidWorks.Interop.sldworks;
 using SolidWorksTester.Services;
+using SolidWorksTester.Services.Drawing;
 
 namespace SolidWorksTester.Cylindrical
 {
@@ -10,48 +11,79 @@ namespace SolidWorksTester.Cylindrical
     /// </summary>
     public static class CylindricalDimCenterlines
     {
-        public static void Add(SmartDimHelper h, IModelDoc2 model, IDrawingDoc drawing, IView view, Action<string> log)
+        /// <summary>
+        /// Adds center marks / centerlines for one view.
+        /// When <paramref name="sideCenterlineAlreadyAdded"/> is true, side-view axis lines are skipped
+        /// (one side view is enough; repeating ActivateView/select on View3 crashes some SW builds).
+        /// Returns whether a side-view centerline was added in this call.
+        /// </summary>
+        public static bool Add(
+            SmartDimHelper h,
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            IView view,
+            Action<string> log,
+            bool sideCenterlineAlreadyAdded = false)
         {
-            string viewName = view.GetName2();
+            string viewName;
+            try
+            {
+                viewName = view.GetName2();
+            }
+            catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
+            {
+                log($"  Warning: centerlines aborted (COM dead before view name): {ex.Message}");
+                throw;
+            }
 
             if (CylindricalViewAnalyzer.IsIsometricView(view))
             {
                 log($"  Centerlines skipped in {viewName} (isometric).");
-                return;
+                return false;
             }
+
+            bool addedSide = false;
 
             try
             {
                 if (!SolidWorksComException.IsAlive(h.SwApp))
                     throw new InvalidOperationException("SOLIDWORKS connection lost.");
 
-                drawing.ActivateView(viewName);
+                // Do not ActivateView here — SelectEdge / InsertCenterMark activate as needed.
                 Edge[] edges = h.GetViewEdgesCached(view);
 
                 if (CylindricalViewAnalyzer.IsEndFaceView(h, view, edges))
                 {
                     if (TryAddEndFaceCenterMarks(h, drawing, view, edges, viewName, log))
-                        return;
+                        return false;
 
                     if (TryAddCutPipeCenterMarkOrLine(h, drawing, view, edges, viewName, log))
-                        return;
+                        return false;
 
                     log($"  Warning: end-face center marks failed in {viewName}, trying centerline fallback.");
+                }
+
+                if (sideCenterlineAlreadyAdded)
+                {
+                    log($"  Centerlines skipped in {viewName} (side axis already placed on another view).");
+                    return false;
                 }
 
                 if (h.HasCenterLineInView(view))
                 {
                     log($"  Centerline already present in {viewName}.");
-                    return;
+                    return false;
                 }
 
                 if (CylindricalDimCenterlinesLegacy.TryAddSideViewCenterline(h, model, drawing, view, log))
                 {
                     log($"  Centerline added in {viewName} (side view).");
-                    return;
+                    addedSide = true;
+                    return true;
                 }
 
                 log($"  Centerlines skipped in {viewName} (side centerline not created).");
+                return false;
             }
             catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
             {
@@ -61,10 +93,19 @@ namespace SolidWorksTester.Cylindrical
             catch (Exception ex)
             {
                 log($"  Warning: centerlines failed in {viewName}: {ex.Message}");
+                return addedSide;
             }
             finally
             {
-                try { h.ClearSelection(); } catch { /* ignore */ }
+                try
+                {
+                    if (SolidWorksComException.IsAlive(h.SwApp))
+                        h.ClearSelection();
+                }
+                catch
+                {
+                    // ignore
+                }
             }
         }
 
@@ -139,7 +180,6 @@ namespace SolidWorksTester.Cylindrical
             if (chord == null || h.HasCenterLineInView(view))
                 return false;
 
-            // Parallel mate on the opposite side of the arc (for InsertCenterLine2 between two edges).
             bool horiz = h.IsHorizontalInView(chord, view, 0.006);
             double[] chordMid = h.GetEdgeMidpointOnSheet(chord, view);
             Edge? mate = edges
@@ -169,11 +209,18 @@ namespace SolidWorksTester.Cylindrical
         {
             try
             {
+                if (!SolidWorksComException.IsAlive(h.SwApp))
+                    return false;
+
                 h.ClearSelection();
                 if (!h.SelectEdge(circle, view, false))
                     return false;
 
-                return drawing.InsertCenterMark2(1, true) != null;
+                return DrawingAnnotationWalk.TryInsertCenterMark2(drawing, 1, true);
+            }
+            catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
+            {
+                throw;
             }
             catch
             {
@@ -181,7 +228,15 @@ namespace SolidWorksTester.Cylindrical
             }
             finally
             {
-                h.ClearSelection();
+                try
+                {
+                    if (SolidWorksComException.IsAlive(h.SwApp))
+                        h.ClearSelection();
+                }
+                catch
+                {
+                    // ignore
+                }
             }
         }
     }

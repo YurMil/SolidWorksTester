@@ -9,6 +9,7 @@ public class EstCatalogRouteTableTests
     [InlineData("ipe", DrawingPipelineId.ImportedGeometry)]
     [InlineData("shell", DrawingPipelineId.LoftedBends)]
     [InlineData("baffle_plate", DrawingPipelineId.FlatPlate)]
+    [InlineData("flange", DrawingPipelineId.FlatPlate)]
     [InlineData("cone", DrawingPipelineId.Cylindrical)]
     public void TryGet_KnownCatalog_OverridesPipeline(string catalogId, DrawingPipelineId expected)
     {

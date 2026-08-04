@@ -161,16 +161,7 @@ namespace SolidWorksTester.FlangeGasket
             foreach (Edge edge in h.GetViewEdgesCached(view))
                 set.Add(edge);
 
-            // Silhouette can be unstable on SW2025 — treat as optional enrichment.
-            try
-            {
-                foreach (Edge edge in h.GetViewSilhouetteEdges(view))
-                    set.Add(edge);
-            }
-            catch
-            {
-                // ignore
-            }
+            // Silhouette intentionally skipped (SW2025 HLV cost / instability).
 
             Edge[] linear = set.Where(h.IsLinear).ToArray();
             if (linear.Length >= 2)

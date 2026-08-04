@@ -31,6 +31,13 @@ namespace SolidWorksTester.FlangeGasket
             Edge[] edges = GetOutlineEdges(h, view);
             Edge[] linear = edges.Where(h.IsLinear).ToArray();
 
+            // Prefer long face-outline edges (flange OD projected as horizontal/vertical lines on side view).
+            Edge[] longLinear = linear
+                .Where(e => h.GetProjectedLength(e, view) >= 0.008)
+                .ToArray();
+            if (longLinear.Length >= 2)
+                linear = longLinear;
+
             double minX, minY, maxX, maxY;
             if (linear.Length >= 2)
             {
@@ -88,6 +95,12 @@ namespace SolidWorksTester.FlangeGasket
                 placed = TryPlaceGabaritBySelectAtOutline(
                     h, view, viewName, minX, minY, maxX, maxY,
                     thicknessVertical, overallThickness, log);
+            }
+
+            if (!placed)
+            {
+                placed = TryPlaceGabaritByVertices(
+                    h, view, viewName, edges, thicknessVertical, overallThickness, scale, log);
             }
 
             if (!placed)
@@ -380,6 +393,115 @@ namespace SolidWorksTester.FlangeGasket
                 return true;
 
             return false;
+        }
+
+        /// <summary>
+        /// Last-resort gabarit: pick two vertices at opposite thickness extremes and dimension them.
+        /// Works on imported solids where linear side edges are missing or unselectable.
+        /// </summary>
+        private static bool TryPlaceGabaritByVertices(
+            SmartDimHelper h,
+            IView view,
+            string viewName,
+            Edge[] edges,
+            bool thicknessVertical,
+            double overallThicknessModel,
+            double scale,
+            Action<string> log)
+        {
+            string key = $"FlangeOverallThk_{overallThicknessModel:F4}_{viewName}";
+            if (h.DimensionedFeatures.Contains(key) || h.DimensionedFeatures.Contains("FlangeProfileThickness"))
+                return false;
+
+            var vertices = new List<(Vertex v, double x, double y)>();
+            foreach (Edge edge in edges)
+            {
+                try
+                {
+                    if (edge.GetStartVertex() is Vertex sv)
+                    {
+                        double[] sheet = h.TransformToSheet((double[])sv.GetPoint(), view);
+                        vertices.Add((sv, sheet[0], sheet[1]));
+                    }
+
+                    if (edge.GetEndVertex() is Vertex ev)
+                    {
+                        double[] sheet = h.TransformToSheet((double[])ev.GetPoint(), view);
+                        vertices.Add((ev, sheet[0], sheet[1]));
+                    }
+                }
+                catch
+                {
+                    // ignore bad vertices
+                }
+            }
+
+            if (vertices.Count < 2)
+                return false;
+
+            // Deduplicate by sheet position.
+            var unique = vertices
+                .GroupBy(p => (Math.Round(p.x, 4), Math.Round(p.y, 4)))
+                .Select(g => g.First())
+                .ToList();
+
+            (Vertex a, Vertex b, double dimX, double dimY)? pair = null;
+            double bestErr = double.MaxValue;
+
+            for (int i = 0; i < unique.Count; i++)
+            {
+                for (int j = i + 1; j < unique.Count; j++)
+                {
+                    double dx = Math.Abs(unique[i].x - unique[j].x);
+                    double dy = Math.Abs(unique[i].y - unique[j].y);
+                    double spanModel = (thicknessVertical ? dy : dx) / scale;
+                    double cross = thicknessVertical ? dx : dy;
+
+                    // Thickness pair: span near gabarit, small lateral offset.
+                    if (cross > Math.Max(0.01, (thicknessVertical ? dx + dy : dx + dy) * 0.35))
+                        continue;
+
+                    double err = Math.Abs(spanModel - overallThicknessModel);
+                    if (err < bestErr && err <= overallThicknessModel * 0.15)
+                    {
+                        bestErr = err;
+                        double dimX = thicknessVertical
+                            ? Math.Max(unique[i].x, unique[j].x) + DimOffset
+                            : (unique[i].x + unique[j].x) / 2.0;
+                        double dimY = thicknessVertical
+                            ? (unique[i].y + unique[j].y) / 2.0
+                            : Math.Max(unique[i].y, unique[j].y) + DimOffset;
+                        pair = (unique[i].v, unique[j].v, dimX, dimY);
+                    }
+                }
+            }
+
+            if (pair == null)
+                return false;
+
+            h.ClearSelection();
+            if (!h.SelectVertex(pair.Value.a, view, false) || !h.SelectVertex(pair.Value.b, view, true))
+            {
+                h.ClearSelection();
+                return false;
+            }
+
+            DisplayDimension? dim = h.CreateLinearDimension(pair.Value.dimX, pair.Value.dimY);
+            h.ClearSelection();
+            if (dim == null)
+                return false;
+
+            if (!IsLinearNearValue(dim, overallThicknessModel, overallThicknessModel * 0.12))
+            {
+                log($"  [{viewName}] Vertex gabarit rejected (wanted {overallThicknessModel * 1000:F1} mm).");
+                TryDeleteDim(h, dim);
+                return false;
+            }
+
+            h.DimensionedFeatures.Add(key);
+            h.DimensionedFeatures.Add("FlangeProfileThickness");
+            log($"  [{viewName}] Overall thickness (gabarit) {overallThicknessModel * 1000:F1} mm (vertices).");
+            return true;
         }
 
         private static bool TryPlaceFromLongestThicknessPair(
@@ -702,12 +824,8 @@ namespace SolidWorksTester.FlangeGasket
 
         private static Edge[] GetOutlineEdges(SmartDimHelper h, IView view)
         {
-            var set = new HashSet<Edge>();
-            foreach (Edge edge in h.GetViewEdgesCached(view))
-                set.Add(edge);
-            foreach (Edge edge in h.GetViewSilhouetteEdges(view))
-                set.Add(edge);
-            return set.ToArray();
+            // Prefer visible model edges only — silhouette API is slow/unstable on SW2025 HLV.
+            return h.GetViewEdgesCached(view);
         }
 
         private static double ParallelDistance(

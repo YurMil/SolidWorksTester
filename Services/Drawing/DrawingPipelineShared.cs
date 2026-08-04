@@ -133,7 +133,7 @@ namespace SolidWorksTester.Services.Drawing
             while (dimViewAuto != null)
             {
                 model.ClearSelection2(true);
-                Annotation? swAnn = dimViewAuto.GetFirstAnnotation3();
+                Annotation? swAnn = DrawingAnnotationWalk.GetFirst(dimViewAuto);
                 int dimCount = 0;
 
                 while (swAnn != null)
@@ -144,7 +144,7 @@ namespace SolidWorksTester.Services.Drawing
                         dimCount++;
                     }
 
-                    swAnn = swAnn.GetNext3();
+                    swAnn = DrawingAnnotationWalk.GetNext(swAnn);
                 }
 
                 if (dimCount > 0)

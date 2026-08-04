@@ -34,7 +34,20 @@ namespace SolidWorksTester.FlangeGasket
             Edge[] edges = h.GetViewEdgesCached(view);
             FlangeDiscGeometry? geometry = FlangeGasketPatternGeometry.Analyze(h, view, edges);
             if (geometry == null)
+            {
+                int circular = edges.Count(h.IsCircular);
+                int full = edges.Count(h.IsFullCircle);
+                log($"  [{viewName}] Flange disc geometry not resolved " +
+                    $"({edges.Length} edges, {circular} circular, {full} full-circle).");
                 return;
+            }
+
+            log($"  [{viewName}] Disc Ø{geometry.OuterDiameterMeters * 1000:F1} mm" +
+                (geometry.InnerDiameterMeters is double id ? $", bore Ø{id * 1000:F1} mm" : "") +
+                (geometry.PrimaryBoltCircle != null
+                    ? $", BCD Ø{geometry.PrimaryBoltCircle.BoltCircleDiameterMeters * 1000:F1} mm × {geometry.PrimaryBoltCircle.Holes.Count}"
+                    : ", no bolt circle") +
+                ".");
 
             CylindricalDimCenterlines.Add(h, model, drawing, view, log);
             AddDiscFaceDimensions(h, drawing, view, viewName, geometry, edges, model, log);
@@ -152,8 +165,7 @@ namespace SolidWorksTester.FlangeGasket
             double maxHole = Math.Max(MaxHoleDiameterMeters, geometry.OuterDiameterMeters * 0.92);
 
             var holeEdges = edges
-                .Where(h.IsCircular)
-                .Where(e => h.IsFullCircle(e))
+                .Where(e => h.IsCircular(e) && (h.IsFullCircle(e) || h.IsCircleProfileInView(e, view)))
                 .Where(e =>
                 {
                     double d = Math.Round(h.GetCircleRadius(e) * 2.0, 4);

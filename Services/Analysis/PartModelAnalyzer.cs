@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using SolidWorksTester.Services;
+using SolidWorksTester.Services.Analysis.FlangeGasket;
 
 namespace SolidWorksTester.Services.Analysis
 {
@@ -58,6 +60,14 @@ namespace SolidWorksTester.Services.Analysis
         public bool IsTrueCylindricalTube { get; init; }
 
         /// <summary>
+        /// Purchased fastener (<c>DocumentType=Fastener</c> / <c>IsFastener=1</c>) — skip drawing.
+        /// </summary>
+        public bool IsFastener { get; set; }
+
+        /// <summary>Human-readable reason when <see cref="IsFastener"/> is true.</summary>
+        public string? FastenerSkipReason { get; set; }
+
+        /// <summary>
         /// Cylinder face samples collected by the analysis scan (radius + axis origin).
         /// Lets drawing-stage pattern math (baffle pitch/angle/seed) run without another face walk.
         /// May be a partial sample when the scan early-exited, but always covers ≥ the dominant
@@ -105,6 +115,8 @@ namespace SolidWorksTester.Services.Analysis
             BboxShortMeters = BboxShortMeters,
             SolidBodyCount = SolidBodyCount,
             IsTrueCylindricalTube = IsTrueCylindricalTube,
+            IsFastener = IsFastener,
+            FastenerSkipReason = FastenerSkipReason,
             CylinderSamples = CylinderSamples
         };
     }
@@ -138,7 +150,11 @@ namespace SolidWorksTester.Services.Analysis
                 bool hasHoles = snap.HasHoles;
                 bool isHollow = snap.IsHollow;
                 bool isCylindricalGeometry = IsCylindricalGeometry(
-                    snap.HasCylindricalFeature, snap.CylindricalFaces, snap.PlanarFaces);
+                    snap.HasCylindricalFeature, snap.CylindricalFaces, snap.PlanarFaces, snap.BboxSortedDims);
+
+                // Hollow OD/ID only when large concentric-like cylinders exist (not slot+fillet radii).
+                if (isHollow && snap.LargeCylinderFaces < 2)
+                    isHollow = false;
 
                 ImportedGeometryDetector.ImportDetectionResult importInfo = snap.ImportDetection;
                 string configName = partDoc.ConfigurationManager.ActiveConfiguration.Name;
@@ -163,16 +179,25 @@ namespace SolidWorksTester.Services.Analysis
                     kind = PartModelKind.ImportedGeometry;
                     SolidBodyAnalysisResult bodyAnalysis = BuildBodyAnalysisFromSnapshot(
                         snap, isHollow, hasHoles, isCylindricalGeometry, importInfo.ImportFeatureCount);
-                    var shapeInfo = ImportedGeometryShapeRecognizer.Recognize(partDoc, bodyAnalysis);
+                    var shapeInfo = ImportedGeometryShapeRecognizer.RecognizeFromBbox(
+                        bodyAnalysis, bboxS, bboxM, bboxL);
                     importedShape = shapeInfo.Shape;
                     isTrueCylindricalTube = shapeInfo.IsTrueCylindricalTube;
                     bboxS = shapeInfo.BboxShortMeters;
                     bboxM = shapeInfo.BboxMidMeters;
                     bboxL = shapeInfo.BboxLongMeters;
+
+                    // STEP blind flanges / discs: promote to FlatPlate so P-01 + flange dims run.
+                    if (ShouldPromoteImportedToFlatPlate(snap, importedShape, partPath))
+                    {
+                        kind = PartModelKind.FlatPlate;
+                        isTrueCylindricalTube = false;
+                    }
                 }
                 else if (isCylindricalGeometry)
                 {
                     kind = PartModelKind.Cylindrical;
+                    isTrueCylindricalTube = isHollow || snap.LargeCylinderFaces >= 2;
                 }
                 else
                 {
@@ -180,7 +205,7 @@ namespace SolidWorksTester.Services.Analysis
                 }
 
                 bool isRoundFlatProfile = kind == PartModelKind.FlatPlate &&
-                    snap.IsRoundFlatDisc(minThickness: 0.0005, minFlatRatio: 5.0, roundTolerance: 0.06);
+                    snap.IsRoundFlatDisc(minThickness: 0.0005, minFlatRatio: 4.0, roundTolerance: 0.10);
 
                 bool isRoundedEndFlatProfile = kind == PartModelKind.FlatPlate &&
                     !isRoundFlatProfile &&
@@ -216,6 +241,12 @@ namespace SolidWorksTester.Services.Analysis
                     isRoundFlatProfile, isRoundedEndFlatProfile, flatPlateSubKind,
                     canImportSketchDimensions, modelSketchDimCount,
                     importInfo, importedShape, snap.SolidBodyCount, bboxL, bboxM, bboxS, log);
+
+                if (kind == PartModelKind.FlatPlate && importInfo.IsImported)
+                {
+                    log($"  Imported body promoted to flat plate (shape: {importedShape}, " +
+                        $"L×M×S: {bboxL * 1000:F1} × {bboxM * 1000:F1} × {bboxS * 1000:F1} mm).");
+                }
 
                 var geometryResult = new PartAnalysisResult
                 {
@@ -304,6 +335,14 @@ namespace SolidWorksTester.Services.Analysis
                 else if (merged.FlatPlateSubKind == FlatPlateSubKind.BafflePlate &&
                          merged.DrawingProfile.Equals("plate", StringComparison.OrdinalIgnoreCase))
                     merged.DrawingProfile = propertyClassification.DrawingProfile ?? "baffle_plate";
+
+                if (FastenerPropertyDetector.TryDetect(propertySnapshot, out string fastenerReason))
+                {
+                    merged.IsFastener = true;
+                    merged.FastenerSkipReason = fastenerReason;
+                    log($"  Fastener detected ({fastenerReason}) — drawing will be skipped.");
+                }
+
                 return merged;
             }
             catch
@@ -312,6 +351,37 @@ namespace SolidWorksTester.Services.Analysis
                 SolidWorksConnection.SafeCloseDocumentByPath(swApp, partPath, log);
                 throw;
             }
+        }
+
+        private static bool ShouldPromoteImportedToFlatPlate(
+            PartGeometrySnapshot snap,
+            ImportedGeometryShapeKind importedShape,
+            string partPath)
+        {
+            if (importedShape == ImportedGeometryShapeKind.FlatPlateLike)
+                return true;
+
+            if (FlangeGasketModelAnalyzer.IsFlangeOrGasket(snap))
+                return true;
+
+            // Filename fallback when STEP has no EST Name (e.g. blind-flange_DN900....step).
+            return FileNameLooksLikeFlangeOrGasket(partPath) &&
+                   snap.IsDiscLikeBbox(minThickness: 0.0005, minFlatRatio: 4.0, roundTolerance: 0.12);
+        }
+
+        private static bool FileNameLooksLikeFlangeOrGasket(string partPath)
+        {
+            string name = Path.GetFileNameWithoutExtension(partPath);
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            // Drop trailing .step from "*.step.SLDPRT" style names.
+            if (name.EndsWith(".step", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith(".stp", StringComparison.OrdinalIgnoreCase))
+                name = Path.GetFileNameWithoutExtension(name);
+
+            string upper = name.ToUpperInvariant();
+            return upper.Contains("FLANGE") || upper.Contains("GASKET");
         }
 
         private static SolidBodyAnalysisResult BuildBodyAnalysisFromSnapshot(
@@ -336,8 +406,13 @@ namespace SolidWorksTester.Services.Analysis
         private static bool IsCylindricalGeometry(
             bool hasCylindricalFeature,
             int cylindricalFaces,
-            int planarFaces)
+            int planarFaces,
+            double[] bboxSorted)
         {
+            // Thin flat stock: short gauge + large face aspect → plate/bracket, not tube.
+            if (LooksLikeThinFlatPlate(bboxSorted, planarFaces, cylindricalFaces))
+                return false;
+
             if (hasCylindricalFeature && cylindricalFaces >= 1)
                 return true;
 
@@ -345,6 +420,38 @@ namespace SolidWorksTester.Services.Analysis
                 return true;
 
             return cylindricalFaces >= 3;
+        }
+
+        /// <summary>
+        /// U-lugs, brackets, slotted plates: thin bbox + planar-dominant (or few large OD faces).
+        /// </summary>
+        private static bool LooksLikeThinFlatPlate(PartGeometrySnapshot snap) =>
+            LooksLikeThinFlatPlate(snap.BboxSortedDims, snap.PlanarFaces, snap.CylindricalFaces);
+
+        private static bool LooksLikeThinFlatPlate(
+            double[] bboxSorted,
+            int planarFaces,
+            int cylindricalFaces)
+        {
+            if (bboxSorted.Length < 3)
+                return false;
+
+            double s = bboxSorted[0];
+            double m = bboxSorted[1];
+            const double maxGaugeMeters = 0.050; // 50 mm
+            const double minFlatRatio = 3.0;
+
+            if (s < 0.0005 || s > maxGaugeMeters)
+                return false;
+
+            if (m / Math.Max(s, 1e-12) < minFlatRatio)
+                return false;
+
+            if (planarFaces > cylindricalFaces)
+                return true;
+
+            // Plate with many small hole/fillet cylinders but not a pipe OD/ID pair.
+            return planarFaces >= 4 && cylindricalFaces > 0;
         }
 
         private static bool IsRoundedEndFlatPlate(PartGeometrySnapshot snap)

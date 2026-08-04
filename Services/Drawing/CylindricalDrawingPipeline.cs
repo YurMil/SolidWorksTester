@@ -75,15 +75,31 @@ namespace SolidWorksTester.Services.Drawing
 
                 IView? primaryView = null;
                 IView? dimView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
+                bool sideCenterlineDone = false;
 
                 while (dimView != null)
                 {
                     if (!SolidWorksComException.IsAlive(swApp))
-                        throw new InvalidOperationException("SOLIDWORKS connection lost during cylindrical annotations.");
+                    {
+                        log("  Aborting cylindrical annotations — SOLIDWORKS connection lost.");
+                        throw new InvalidOperationException(
+                            "SOLIDWORKS connection lost during cylindrical annotations.");
+                    }
 
                     string vName = dimView.GetName2();
                     log($"  Centerlines: {vName}");
-                    CylindricalDimCenterlines.Add(dimHelper, model, drawing, dimView, log);
+                    try
+                    {
+                        if (CylindricalDimCenterlines.Add(
+                                dimHelper, model, drawing, dimView, log, sideCenterlineDone))
+                            sideCenterlineDone = true;
+                    }
+                    catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
+                    {
+                        log($"  Aborting after centerline COM failure on {vName}: {ex.Message}");
+                        throw;
+                    }
+
                     if (primaryView == null && !vName.Equals("Drawing View4", StringComparison.OrdinalIgnoreCase))
                         primaryView = dimView;
 
@@ -92,12 +108,22 @@ namespace SolidWorksTester.Services.Drawing
 
                 if (primaryView != null)
                 {
-                    CylindricalDimModelImport.ImportOnce(model, drawing, primaryView, log);
-                    log("Checking for duplicate dimensions after model import...");
-                    DrawingDimensionDeduper.RemoveDuplicateDimensions(
-                        model, drawing, log, "Drawing View4");
-                    DrawingDimensionDeduper.RemoveQuantityPrefixedDiameterDuplicates(
-                        model, drawing, log, "Drawing View4");
+                    // Model-item dump on brackets/lugs misrouted as cylindrical floods the sheet
+                    // and makes subsequent dim probes hang. Only import for true tubes.
+                    if (analysis.IsTrueCylindricalTube || analysis.IsHollow)
+                    {
+                        CylindricalDimModelImport.ImportOnce(model, drawing, primaryView, log);
+                        dimHelper.InvalidateDimensionValueCache();
+                        log("Checking for duplicate dimensions after model import...");
+                        DrawingDimensionDeduper.RemoveDuplicateDimensions(
+                            model, drawing, log, "Drawing View4");
+                        DrawingDimensionDeduper.RemoveQuantityPrefixedDiameterDuplicates(
+                            model, drawing, log, "Drawing View4");
+                    }
+                    else
+                    {
+                        log("  Model dimension import skipped (not a true cylindrical tube).");
+                    }
                 }
 
                 dimView = (drawing.GetFirstView() as IView)?.GetNextView() as IView;
@@ -111,13 +137,20 @@ namespace SolidWorksTester.Services.Drawing
 
                     if (!isIsometric)
                     {
-                        log($"  Dimensions: {vName}");
-                        CylindricalDimSizes.Add(dimHelper, dimView, analysis, log);
+                        try
+                        {
+                            log($"  Dimensions: {vName}");
+                            CylindricalDimSizes.Add(dimHelper, dimView, analysis, log);
 
-                        if (runChamfers)
-                            CylindricalDimChamfers.Add(dimHelper, dimView, log);
+                            if (runChamfers)
+                                CylindricalDimChamfers.Add(dimHelper, dimView, log);
 
-                        CylindricalDimCuts.Add(dimHelper, dimView, log);
+                            CylindricalDimCuts.Add(dimHelper, dimView, log);
+                        }
+                        catch (Exception ex) when (!SolidWorksComException.IsConnectionFailure(ex))
+                        {
+                            log($"  Warning: dimensions failed in {vName}: {ex.Message}");
+                        }
                     }
 
                     dimView = dimView.GetNextView() as IView;
@@ -125,8 +158,18 @@ namespace SolidWorksTester.Services.Drawing
             }
             finally
             {
-                dimHelper.ClearViewCaches();
-                dimHelper.RestoreDimInput();
+                try
+                {
+                    if (SolidWorksComException.IsAlive(swApp))
+                    {
+                        dimHelper.ClearViewCaches();
+                        dimHelper.RestoreDimInput();
+                    }
+                }
+                catch
+                {
+                    // SW may already be dead after Access Violation / RPC failure.
+                }
             }
         }
 

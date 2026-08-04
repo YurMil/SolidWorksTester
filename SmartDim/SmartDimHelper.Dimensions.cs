@@ -1,5 +1,6 @@
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using SolidWorksTester.Services.Drawing;
 
 namespace SolidWorksTester
 {
@@ -17,8 +18,13 @@ namespace SolidWorksTester
         /// <summary>
         /// Creates a display dimension at sheet coordinates; entities must be pre-selected.
         /// </summary>
-        public DisplayDimension? CreateDimension(double textX, double textY) =>
-            Model.AddDimension2(textX, textY, 0.0) as DisplayDimension;
+        public DisplayDimension? CreateDimension(double textX, double textY)
+        {
+            var dim = Model.AddDimension2(textX, textY, 0.0) as DisplayDimension;
+            if (dim != null)
+                InvalidateDimensionValueCache();
+            return dim;
+        }
 
         /// <summary>
         /// Forces a linear dimension (avoids angular when two non-parallel edges are selected).
@@ -30,7 +36,10 @@ namespace SolidWorksTester
                 textX, textY, 0.0,
                 (int)swDimensionType_e.swLinearDimension,
                 ref err) as DisplayDimension;
-            return dim ?? CreateDimension(textX, textY);
+            dim ??= CreateDimension(textX, textY);
+            if (dim != null)
+                InvalidateDimensionValueCache();
+            return dim;
         }
 
         /// <summary>
@@ -65,7 +74,10 @@ namespace SolidWorksTester
             {
                 dim = Model.AddDimension2(textX, textY, 0.0) as DisplayDimension;
                 if (dim != null)
+                {
+                    InvalidateDimensionValueCache();
                     return dim;
+                }
             }
 
             int err = 0;
@@ -75,9 +87,14 @@ namespace SolidWorksTester
                 ref err) as DisplayDimension;
 
             if (dim != null)
+            {
+                InvalidateDimensionValueCache();
                 return dim;
+            }
 
             dim = Model.AddRadialDimension2(textX, textY, 0.0) as DisplayDimension;
+            if (dim != null)
+                InvalidateDimensionValueCache();
             return dim;
         }
 
@@ -90,7 +107,7 @@ namespace SolidWorksTester
                 if (!SelectEdge(circularEdge, view, false))
                     return false;
 
-                return drawing.InsertCenterMark2(1, true) != null;
+                return DrawingAnnotationWalk.TryInsertCenterMark2(drawing, 1, true);
             }
             catch
             {

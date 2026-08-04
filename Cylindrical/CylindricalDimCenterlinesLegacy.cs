@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using SolidWorks.Interop.sldworks;
+using SolidWorksTester.Services;
+using SolidWorksTester.Services.Drawing;
 
 namespace SolidWorksTester.Cylindrical
 {
@@ -21,16 +23,15 @@ namespace SolidWorksTester.Cylindrical
         {
             string viewName = view.GetName2();
 
+            // Edge-pair strategies only. Face + SelectByID2 fallback (old Help sample) causes
+            // Access Violation / RPC death on some SW 2024–2025 builds — do not use it.
             if (TryInsertCenterlineFromOuterEdges(h, drawing, view))
                 return true;
 
             if (TryInsertCenterlineFromBBoxMidline(h, drawing, view))
                 return true;
 
-            if (TryInsertCenterlinePerSolidWorksHelp(h, model, drawing, view))
-                return true;
-
-            log($"  Side-view centerline not created in {viewName}.");
+            log($"  Side-view centerline not created in {viewName} (edge strategies exhausted).");
             return false;
         }
 
@@ -188,38 +189,12 @@ namespace SolidWorksTester.Cylindrical
             IDrawingDoc drawing,
             IView view)
         {
-            Face2? cylFace = h.FindBestCylindricalFaceInView(view);
-            if (cylFace == null)
-                return false;
-
-            int before = view.GetCenterLineCount();
-            string viewName = view.GetName2();
-
-            try
-            {
-                h.ClearSelection();
-                drawing.ActivateView(viewName);
-                h.SelectDrawingComponent(view);
-
-                double[] pickPoint = h.GetCylindricalFacePickPointOnSheet(cylFace, view);
-                if (!h.SelectFaceBySheetPoint(view, pickPoint) && !h.SelectFace(cylFace, view, false))
-                    return false;
-
-                if (drawing.InsertCenterLine2() != null)
-                    return view.GetCenterLineCount() > before || h.HasCenterLineInView(view);
-
-                if (drawing.InsertCenterLine())
-                    return view.GetCenterLineCount() > before || h.HasCenterLineInView(view);
-            }
-            catch
-            {
-                return false;
-            }
-            finally
-            {
-                h.ClearSelection();
-            }
-
+            // Intentionally disabled: ActivateView + SelectByID2(FACE) crashes SOLIDWORKS
+            // (Access Violation in slddrwu) on several 2024 SP5 / 2025 builds.
+            _ = h;
+            _ = model;
+            _ = drawing;
+            _ = view;
             return false;
         }
 
@@ -263,20 +238,27 @@ namespace SolidWorksTester.Cylindrical
         {
             try
             {
+                if (!SolidWorksComException.IsAlive(h.SwApp))
+                    return false;
+
                 int before = view.GetCenterLineCount();
                 h.ClearSelection();
-                drawing.ActivateView(view.GetName2());
+                // SelectEdge activates the view — avoid a second ActivateView (selection storms crash SW).
 
                 if (!h.SelectEdge(edgeA, view, false))
                     return false;
                 if (!h.SelectEdge(edgeB, view, true))
                     return false;
 
-                if (drawing.InsertCenterLine2() != null)
+                if (DrawingAnnotationWalk.TryInsertCenterLine2(drawing))
                     return view.GetCenterLineCount() > before || h.HasCenterLineInView(view);
 
                 if (drawing.InsertCenterLine())
                     return view.GetCenterLineCount() > before || h.HasCenterLineInView(view);
+            }
+            catch (Exception ex) when (SolidWorksComException.IsConnectionFailure(ex))
+            {
+                throw;
             }
             catch
             {
@@ -284,7 +266,15 @@ namespace SolidWorksTester.Cylindrical
             }
             finally
             {
-                h.ClearSelection();
+                try
+                {
+                    if (SolidWorksComException.IsAlive(h.SwApp))
+                        h.ClearSelection();
+                }
+                catch
+                {
+                    // ignore
+                }
             }
 
             return false;

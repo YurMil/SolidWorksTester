@@ -33,6 +33,9 @@ SolidWorksTester/
 ├── LoftedBends/
 ├── Imported/
 ├── UI/
+│   ├── Controls/                    Themed* + TaskManagerView
+│   ├── Models/                      BatchTaskItem / BatchTaskStatus
+│   ├── Layout/ / Views/ / Theme/
 └── Docs/
 ```
 

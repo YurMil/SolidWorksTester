@@ -52,9 +52,78 @@ namespace SolidWorksTester
             return new[] { cp[0], cp[1], cp[2] };
         }
 
-        /// <summary>True for closed circular profiles (no start/end vertex).</summary>
-        public bool IsFullCircle(Edge edge) =>
-            edge.GetStartVertex() == null && edge.GetEndVertex() == null;
+        /// <summary>
+        /// True for closed circular profiles usable as Ø dimensions.
+        /// Native SW circles often have null start/end vertices; imported STEP/IGES/X_T
+        /// circles frequently keep coincident vertices or a closed/periodic param range.
+        /// </summary>
+        public bool IsFullCircle(Edge edge)
+        {
+            try
+            {
+                if (edge.GetStartVertex() == null && edge.GetEndVertex() == null)
+                    return true;
+
+                if (!IsCircular(edge))
+                    return false;
+
+                ICurve curve = (ICurve)edge.GetCurve();
+                double start = 0, end = 0;
+                bool isClosed = false, isPeriodic = false;
+                curve.GetEndParams(out start, out end, out isClosed, out isPeriodic);
+                if (isClosed || isPeriodic)
+                    return true;
+
+                double span = Math.Abs(end - start);
+                // Nearly full turn in curve parameter space (typically radians).
+                if (span >= Math.PI * 1.9)
+                    return true;
+
+                // Coincident start/end vertices on a circular edge ≈ closed loop from import.
+                if (edge.GetStartVertex() is Vertex sv && edge.GetEndVertex() is Vertex ev)
+                {
+                    double[] sp = (double[])sv.GetPoint();
+                    double[] ep = (double[])ev.GetPoint();
+                    double dx = sp[0] - ep[0], dy = sp[1] - ep[1], dz = sp[2] - ep[2];
+                    double dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                    double tol = Math.Max(1e-8, GetCircleRadius(edge) * 1e-5);
+                    if (dist <= tol && span >= Math.PI)
+                        return true;
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Circular edge seen face-on that can drive OD/hole dims — full circle or long profile arc.
+        /// </summary>
+        public bool IsDimensionableCircleInView(Edge edge, IView view)
+        {
+            if (!IsCircular(edge) || !IsCircleProfileInView(edge, view))
+                return false;
+
+            if (IsFullCircle(edge))
+                return true;
+
+            // Imported discs sometimes tessellate the OD into long arcs (>270°).
+            try
+            {
+                ICurve curve = (ICurve)edge.GetCurve();
+                double start = 0, end = 0;
+                bool isClosed = false, isPeriodic = false;
+                curve.GetEndParams(out start, out end, out isClosed, out isPeriodic);
+                return Math.Abs(end - start) >= Math.PI * 1.5;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         /// <summary>
         /// True when a circular edge is seen as a true profile (cylinder axis normal to the view).
