@@ -12,12 +12,22 @@ namespace SolidWorksTester.Services.Drawing.Routing
             string partPath,
             PartAnalysisResult analysis,
             DrawingRouteDecision route,
-            Action<string> log)
+            Action<string> log,
+            string? sheetFormatPath = null)
         {
+            bool userChoseSheetFormat = !string.IsNullOrWhiteSpace(sheetFormatPath);
+            if (userChoseSheetFormat)
+            {
+                DrawingSheetProfile.ApplySelectedFormat(
+                    drawingModel, (IDrawingDoc)drawingModel, sheetFormatPath!, log);
+            }
+
             switch (route.PipelineId)
             {
                 case DrawingPipelineId.FlatPlate:
-                    FlatPlateDrawingPipeline.Process(swApp, drawingModel, partPath, analysis, route, log);
+                    FlatPlateDrawingPipeline.Process(
+                        swApp, drawingModel, partPath, analysis, route, log,
+                        allowAutoSheetFormat: !userChoseSheetFormat);
                     break;
 
                 case DrawingPipelineId.BentSheetMetal:

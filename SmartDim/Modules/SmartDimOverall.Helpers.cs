@@ -11,6 +11,17 @@ namespace SolidWorksTester
     /// </summary>
     public static partial class SmartDimOverall
     {
+        /// <summary>
+        /// True when a horizontal edge length is the full outline width, not a flat between corners.
+        /// </summary>
+        internal static bool WidthEdgeCoversOutline(double edgeModelMeters, double outlineSheetMeters, double scale)
+        {
+            if (scale < 1e-9 || outlineSheetMeters < 1e-9)
+                return false;
+
+            return Math.Abs(edgeModelMeters - outlineSheetMeters / scale) <= 0.005;
+        }
+
         private static bool TryDimensionEdgeLength(
             SmartDimHelper h,
             IView view,

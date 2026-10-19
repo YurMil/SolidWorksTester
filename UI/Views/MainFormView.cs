@@ -7,6 +7,7 @@ namespace SolidWorksTester.UI.Views
     internal sealed class MainFormView
     {
         public required TextBox TemplateTextBox { get; init; }
+        public required TextBox SheetFormatTextBox { get; init; }
         public required TaskManagerView TaskManager { get; init; }
         public required Label TasksCountLabel { get; init; }
         public required ThemedButton AddFilesButton { get; init; }

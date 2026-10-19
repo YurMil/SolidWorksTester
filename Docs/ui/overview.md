@@ -54,12 +54,11 @@ Cancellation token stops the loop between parts.
 
 ---
 
-## Default template path
+## Template and sheet-format paths
 
-Initial value: `AppMetadata.DefaultTemplatePath`  
-(`C:\EST\91_SW Setup\Templates\DRAWING.DRWDOT`)
+Both fields start empty on a machine that has never saved them. The user types or browses the paths; each change is written to `%TEMP%\SolidWorksTester\paths.json` (the current user's temp folder). The next launch on the same Windows profile restores them.
 
-Shown in `ThemedTextField` with ToolTip explaining `.DRWDOT` / `.SLDDRW` templates.
+The sheet format is applied with `SetupSheet6` before views are created. Leave that field empty to keep the border embedded in the drawing template. A baffle drawing does not auto-switch to another format while a sheet format is selected.
 
 ---
 

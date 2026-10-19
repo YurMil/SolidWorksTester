@@ -21,7 +21,8 @@ namespace SolidWorksTester.Services.Drawing
             string partPath,
             PartAnalysisResult analysis,
             DrawingRouteDecision route,
-            Action<string> log)
+            Action<string> log,
+            bool allowAutoSheetFormat = true)
         {
             var drawing = (IDrawingDoc)drawingModel;
             using var timer = new PipelineStopwatch(log, $"pipeline {route.PipelineLabel}");
@@ -32,7 +33,7 @@ namespace SolidWorksTester.Services.Drawing
                 : $"Using flat-plate drawing pipeline (3 views + isometric, no flat pattern). [{route.PipelineLabel}]");
 
             bool formatSwitched = false;
-            if (baffle)
+            if (baffle && allowAutoSheetFormat)
             {
                 timer.Measure("sheet format EST_A*L", () =>
                     formatSwitched = DrawingSheetProfile.ApplyForBaffleIfNeeded(

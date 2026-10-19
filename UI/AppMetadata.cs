@@ -9,8 +9,6 @@ namespace SolidWorksTester.UI
         public const string VersionDisplay = "v" + Version;
         public const string FooterAuthorText = "Author: " + Author;
 
-        public const string DefaultTemplatePath = @"C:\EST\91_SW Setup\Templates\DRAWING.DRWDOT";
-
         /// <summary>Release notes file name for a given application version (e.g. v0.0.01.md).</summary>
         public static string GetReleaseNotesFileName(string version) => $"v{version}.md";
     }

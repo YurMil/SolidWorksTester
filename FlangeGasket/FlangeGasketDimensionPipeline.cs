@@ -23,10 +23,12 @@ namespace SolidWorksTester.FlangeGasket
 
             timer.Measure("Step 1: import marked dims", () =>
             {
-                if (analysis?.IsImportedGeometry == true ||
-                    analysis?.ImportFeatureCount > 0)
+                if (ShouldSkipModelDimensionImport(analysis))
                 {
-                    log("  Step 1: skip model import (imported / dumb solid — no marked dims).");
+                    string feature = string.IsNullOrWhiteSpace(analysis?.ImportFeatureName)
+                        ? ""
+                        : $" '{analysis.ImportFeatureName}'";
+                    log($"  Step 1: skip model import (imported dumb solid{feature} — no marked dims).");
                     return;
                 }
 
@@ -95,6 +97,21 @@ namespace SolidWorksTester.FlangeGasket
                 FlangeGasketImportedDimUpgrader.EnsureHoleQuantityCallouts(
                     dimHelper, model, discFaceView, log);
             });
+        }
+
+        /// <summary>
+        /// Pure STEP/IGES bodies have no sketch dimensions. A native sheet-metal part can
+        /// still carry an import-named feature; that must not block model-item import.
+        /// </summary>
+        internal static bool ShouldSkipModelDimensionImport(PartAnalysisResult? analysis)
+        {
+            if (analysis == null)
+                return false;
+
+            if (analysis.CanImportSketchDimensions)
+                return false;
+
+            return analysis.IsImportedGeometry;
         }
 
         private static double? ResolveExpectedThicknessMm(PartAnalysisResult? analysis)

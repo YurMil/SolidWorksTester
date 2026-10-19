@@ -31,7 +31,7 @@ namespace SolidWorksTester.UI.Layout
 
             CreateHeader(root);
             CreateDisclaimer(root);
-            ThemedTextField field = CreateTemplateSection(root, toolTip);
+            (ThemedTextField templateField, ThemedTextField sheetFormatField) = CreateTemplateSection(root, toolTip);
             TasksSection tasks = CreateTasksSection(root);
             var (runButton, cancelButton, statusLabel, progressBar) = CreateActionSection(root);
             var (eventLogHeader, logView) = CreateLogSection(root);
@@ -39,7 +39,8 @@ namespace SolidWorksTester.UI.Layout
 
             return new MainFormView
             {
-                TemplateTextBox = field.Inner,
+                TemplateTextBox = templateField.Inner,
+                SheetFormatTextBox = sheetFormatField.Inner,
                 TaskManager = tasks.Manager,
                 TasksCountLabel = tasks.CountLabel,
                 AddFilesButton = tasks.AddFiles,
@@ -119,7 +120,9 @@ namespace SolidWorksTester.UI.Layout
             root.Controls.Add(banner, 0, 1);
         }
 
-        private static ThemedTextField CreateTemplateSection(TableLayoutPanel root, ToolTip toolTip)
+        private static (ThemedTextField Template, ThemedTextField SheetFormat) CreateTemplateSection(
+            TableLayoutPanel root,
+            ToolTip toolTip)
         {
             var card = new ThemedCard
             {
@@ -133,17 +136,63 @@ namespace SolidWorksTester.UI.Layout
             {
                 Dock = DockStyle.Top,
                 ColumnCount = 1,
-                RowCount = 3,
+                RowCount = 6,
                 BackColor = Color.Transparent,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            for (int i = 0; i < 6; i++)
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var header = UiControlHelper.CreateSectionLabel("Drawing template");
-            var caption = UiControlHelper.CreateCaptionLabel("SOLIDWORKS template (.DRWDOT / .SLDDRW)");
+            (string templatePath, string sheetFormatPath) = UiPathCache.Load();
+
+            var templateField = AddPathEditor(
+                layout,
+                headerRow: 0,
+                "Drawing template",
+                "SOLIDWORKS template (.DRWDOT / .SLDDRW)",
+                templatePath,
+                "Select Drawing Template",
+                "SOLIDWORKS Templates|*.drwdot;*.slddrw|All Files|*.*",
+                toolTip,
+                topMargin: 8);
+
+            var sheetFormatField = AddPathEditor(
+                layout,
+                headerRow: 3,
+                "Sheet format",
+                "SOLIDWORKS sheet format (.SLDDRT)",
+                sheetFormatPath,
+                "Select Sheet Format",
+                "SOLIDWORKS Sheet Formats|*.slddrt|All Files|*.*",
+                toolTip,
+                topMargin: 14);
+
+            void PersistPaths(object? _, EventArgs __) =>
+                UiPathCache.Save(templateField.Text, sheetFormatField.Text);
+
+            templateField.Inner.TextChanged += PersistPaths;
+            sheetFormatField.Inner.TextChanged += PersistPaths;
+
+            card.Controls.Add(layout);
+            root.Controls.Add(card, 0, 2);
+            return (templateField, sheetFormatField);
+        }
+
+        private static ThemedTextField AddPathEditor(
+            TableLayoutPanel layout,
+            int headerRow,
+            string headerText,
+            string captionText,
+            string initialPath,
+            string browseTitle,
+            string browseFilter,
+            ToolTip toolTip,
+            int topMargin)
+        {
+            var header = UiControlHelper.CreateSectionLabel(headerText);
+            header.Margin = new Padding(0, headerRow == 0 ? 0 : topMargin, 0, 0);
+            var caption = UiControlHelper.CreateCaptionLabel(captionText);
 
             var fieldRow = new Panel
             {
@@ -154,13 +203,18 @@ namespace SolidWorksTester.UI.Layout
                 Margin = new Padding(0, 8, 0, 0)
             };
 
-            var field = new ThemedTextField(AppMetadata.DefaultTemplatePath)
+            var field = new ThemedTextField(initialPath)
             {
                 Dock = DockStyle.Fill,
                 Margin = new Padding(0, 0, 10, 0)
             };
-            field.Inner.ShortcutsEnabled = false;
             toolTip.SetToolTip(field, field.Text);
+            toolTip.SetToolTip(field.Inner, field.Text);
+            field.Inner.TextChanged += (_, _) =>
+            {
+                toolTip.SetToolTip(field, field.Text);
+                toolTip.SetToolTip(field.Inner, field.Text);
+            };
 
             var browse = new ThemedButton
             {
@@ -171,17 +225,14 @@ namespace SolidWorksTester.UI.Layout
                 MinimumSize = new Size(UiTheme.BrowseButtonWidth, UiTheme.ControlHeight),
                 MaximumSize = new Size(UiTheme.BrowseButtonWidth, UiTheme.ControlHeight)
             };
-            browse.Click += (_, _) => BrowseTemplate(field.Inner, toolTip, field);
+            browse.Click += (_, _) => BrowseFile(field.Inner, toolTip, field, browseTitle, browseFilter);
 
             fieldRow.Controls.Add(field);
             fieldRow.Controls.Add(browse);
 
-            layout.Controls.Add(header, 0, 0);
-            layout.Controls.Add(caption, 0, 1);
-            layout.Controls.Add(fieldRow, 0, 2);
-
-            card.Controls.Add(layout);
-            root.Controls.Add(card, 0, 2);
+            layout.Controls.Add(header, 0, headerRow);
+            layout.Controls.Add(caption, 0, headerRow + 1);
+            layout.Controls.Add(fieldRow, 0, headerRow + 2);
             return field;
         }
 
@@ -561,23 +612,28 @@ namespace SolidWorksTester.UI.Layout
             countLabel.Text = selected > 0 ? $"{baseText} · {selected} selected" : baseText;
         }
 
-        private static void BrowseTemplate(TextBox templateTextBox, ToolTip toolTip, ThemedTextField field)
+        private static void BrowseFile(
+            TextBox pathTextBox,
+            ToolTip toolTip,
+            ThemedTextField field,
+            string title,
+            string filter)
         {
             using var dialog = new OpenFileDialog
             {
-                Title = "Select Drawing Template",
-                Filter = "SOLIDWORKS Templates|*.drwdot;*.slddrw|All Files|*.*",
+                Title = title,
+                Filter = filter,
                 CheckFileExists = true,
-                FileName = templateTextBox.Text,
-                InitialDirectory = GetTemplateInitialDirectory(templateTextBox.Text)
+                FileName = pathTextBox.Text,
+                InitialDirectory = GetTemplateInitialDirectory(pathTextBox.Text)
             };
 
             if (dialog.ShowDialog() != DialogResult.OK)
                 return;
 
-            templateTextBox.Text = dialog.FileName;
+            pathTextBox.Text = dialog.FileName;
             toolTip.SetToolTip(field, dialog.FileName);
-            toolTip.SetToolTip(templateTextBox, dialog.FileName);
+            toolTip.SetToolTip(pathTextBox, dialog.FileName);
         }
 
         private static string? GetTemplateInitialDirectory(string path)

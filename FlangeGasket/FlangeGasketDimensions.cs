@@ -31,6 +31,17 @@ namespace SolidWorksTester.FlangeGasket
             if (!isDiscFace)
                 return;
 
+            // Bbox can look like a disc (hex/octagon plate) while the drawing outline is linear.
+            // Flange OD/BCD does not apply; overall and hole callouts still do.
+            if (!FlangeGasketViewAnalyzer.IsDominantDiscFaceView(h, view))
+            {
+                log($"  [{viewName}] Face is not a circular disc — overall, holes, and hole positions.");
+                SmartDimOverall.Add(h, view, log);
+                SmartDimHoles.AddForStandardViews(h, view, log: log);
+                SmartDimHolePositions.Add(h, view, log);
+                return;
+            }
+
             Edge[] edges = h.GetViewEdgesCached(view);
             FlangeDiscGeometry? geometry = FlangeGasketPatternGeometry.Analyze(h, view, edges);
             if (geometry == null)

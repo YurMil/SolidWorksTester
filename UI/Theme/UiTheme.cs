@@ -45,7 +45,7 @@ namespace SolidWorksTester.UI.Theme
         // minimum size is measured from the live layout (see FormWindowConstraints), so nothing
         // here has to be kept in sync with what the controls actually need.
         public const int WindowWidth = 1000;
-        public const int WindowHeight = 760;
+        public const int WindowHeight = 840;
 
         public const int RootPadding = 12;
         public const int CardPadding = 16;

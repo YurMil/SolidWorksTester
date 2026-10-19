@@ -46,13 +46,11 @@ namespace SolidWorksTester.Services.Drawing.FlatPlate
             if (analysis.FlatPlateSubKind == FlatPlateSubKind.FlangeGasket ||
                 FlangeGasketViewAnalyzer.DetectFromDrawing(dimHelper, drawing))
             {
-                IView? discView = FlangeGasketViewAnalyzer.FindPrimaryDiscView(dimHelper, drawing);
-                return new FlatPlateDimContext
-                {
-                    SubKind = FlatPlateSubKind.FlangeGasket,
-                    PrimaryFlatView = discView,
-                    DiscFaceView = discView
-                };
+                // Same resolution as the override path, including the near-square outline
+                // fallback. A polygonal plate (hex/octagon) has no circular OD, so
+                // FindPrimaryDiscView alone leaves DiscFaceView null and the dim pass
+                // skips every view.
+                return BuildFromSubKind(FlatPlateSubKind.FlangeGasket, dimHelper, drawing);
             }
 
             bool isRoundDisc = analysis.IsRoundFlatProfile ||

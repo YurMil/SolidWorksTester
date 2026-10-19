@@ -43,6 +43,21 @@ namespace SolidWorksTester
         }
 
         /// <summary>
+        /// Horizontal distance, including vertex-to-arc spans that are not on one horizontal line.
+        /// </summary>
+        public DisplayDimension? CreateHorizontalDimension(double textX, double textY)
+        {
+            int err = 0;
+            DisplayDimension? dim = Ext.AddSpecificDimension(
+                textX, textY, 0.0,
+                (int)swDimensionType_e.swHorLinearDimension,
+                ref err) as DisplayDimension;
+            if (dim != null)
+                InvalidateDimensionValueCache();
+            return dim;
+        }
+
+        /// <summary>
         /// Angular dimension; two lines/edges must be pre-selected.
         /// Does not fall back to <see cref="IModelDoc2.AddDimension2"/> (that creates a linear chord).
         /// </summary>

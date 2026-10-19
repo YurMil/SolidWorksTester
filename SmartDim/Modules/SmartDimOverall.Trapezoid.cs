@@ -48,6 +48,7 @@ namespace SolidWorksTester
                 .OrderByDescending(t => t.Len)
                 .ToArray();
 
+            double outlineSheetW = Math.Abs(maxX - minX);
             if (topBand.Length > 0 && botBand.Length > 0)
             {
                 var top = topBand[0];
@@ -55,26 +56,30 @@ namespace SolidWorksTester
 
                 // Same top/bottom length but shorter than outline → fillets on a rectangle;
                 // fall back to overall span instead of edge-length dims.
-                if (Math.Abs(top.ModelLen - bot.ModelLen) < 0.005)
+                if (Math.Abs(top.ModelLen - bot.ModelLen) < 0.005 &&
+                    !WidthEdgeCoversOutline(top.ModelLen, outlineSheetW, scale))
                 {
-                    double outlineW = Math.Abs(maxX - minX);
-                    if (Math.Abs(top.ModelLen - outlineW / scale) > 0.005)
-                        return false;
+                    return false;
                 }
             }
 
-            bool any = false;
+            bool topCovers = false;
+            bool botCovers = false;
 
             if (topBand.Length > 0)
             {
                 var top = topBand[0];
+                topCovers = WidthEdgeCoversOutline(top.ModelLen, outlineSheetW, scale);
                 if (TryDimensionEdgeLength(
                         h, view, top.Edge, top.ModelLen,
                         (minX + maxX) / 2.0, maxY + DimOffset,
-                        "Overall_W_Top", "Overall_W"))
+                        "Overall_W_Top", topCovers ? "Overall_W" : null))
                 {
                     log?.Invoke($"  [Overall] Top width {top.ModelLen * 1000:F1} mm on {viewName}.");
-                    any = true;
+                }
+                else
+                {
+                    topCovers = false;
                 }
             }
 
@@ -82,22 +87,29 @@ namespace SolidWorksTester
             {
                 var bot = botBand[0];
                 var top = topBand.Length > 0 ? topBand[0] : bot;
+                botCovers = WidthEdgeCoversOutline(bot.ModelLen, outlineSheetW, scale);
 
                 // Skip if essentially same as top (rectangle).
-                if (!any || Math.Abs(bot.ModelLen - top.ModelLen) > 0.002)
+                bool sameAsTop = topBand.Length > 0 && Math.Abs(bot.ModelLen - top.ModelLen) <= 0.002;
+                if (!sameAsTop)
                 {
                     if (TryDimensionEdgeLength(
                             h, view, bot.Edge, bot.ModelLen,
                             (minX + maxX) / 2.0, minY - DimOffset,
-                            "Overall_W_Bottom", null))
+                            "Overall_W_Bottom", botCovers ? "Overall_W" : null))
                     {
                         log?.Invoke($"  [Overall] Bottom width {bot.ModelLen * 1000:F1} mm on {viewName}.");
-                        any = true;
+                    }
+                    else
+                    {
+                        botCovers = false;
                     }
                 }
             }
 
-            return any;
+            // A shorter flat (chamfer / radius eats the corners) is not the gabarit.
+            // Caller then places the true left-to-right outline width.
+            return topCovers || botCovers;
         }
 
         /// <summary>Angular dim between bottom (or top) horizontal and the long slanted side.</summary>

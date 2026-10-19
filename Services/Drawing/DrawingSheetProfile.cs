@@ -39,6 +39,134 @@ namespace SolidWorksTester.Services.Drawing
         private static readonly EstFormat FormatA3 = new("EST_A3L", swDwgPaperSizes_e.swDwgPaperA3size, 0.420, 0.297);
         private static readonly EstFormat FormatA4 = new("EST_A4L", swDwgPaperSizes_e.swDwgPaperA4size, 0.297, 0.210);
 
+        /// <summary>ISO paper size inferred from a sheet-format file name (A3L, A4P, …).</summary>
+        internal readonly struct SheetFormatSize
+        {
+            public SheetFormatSize(swDwgPaperSizes_e paper, double widthMeters, double heightMeters)
+            {
+                Paper = paper;
+                WidthMeters = widthMeters;
+                HeightMeters = heightMeters;
+            }
+
+            public swDwgPaperSizes_e Paper { get; }
+            public double WidthMeters { get; }
+            public double HeightMeters { get; }
+        }
+
+        /// <summary>
+        /// Loads the user-selected <c>.slddrt</c> onto the current sheet before views are created.
+        /// Paper size comes from an <c>A0</c>–<c>A4</c> token in the file name (<c>L</c> landscape, <c>P</c> portrait).
+        /// </summary>
+        public static bool ApplySelectedFormat(
+            IModelDoc2 model,
+            IDrawingDoc drawing,
+            string formatPath,
+            Action<string> log)
+        {
+            if (string.IsNullOrWhiteSpace(formatPath))
+                return false;
+
+            if (!File.Exists(formatPath))
+            {
+                log($"  Sheet format: file not found — {formatPath}");
+                return false;
+            }
+
+            if (!TryParsePaperSize(formatPath, out SheetFormatSize size))
+            {
+                log($"  Sheet format: no A0–A4 size in '{Path.GetFileName(formatPath)}' — template border kept.");
+                return false;
+            }
+
+            ISheet? sheet = drawing.GetCurrentSheet() as ISheet;
+            if (sheet == null)
+            {
+                log("  Sheet format: current sheet is missing.");
+                return false;
+            }
+
+            string currentSlddrt = sheet.GetTemplateName() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(currentSlddrt) && PathsEqual(currentSlddrt, formatPath))
+            {
+                log($"  Sheet format: already {Path.GetFileName(formatPath)}.");
+                return false;
+            }
+
+            double[] props = (double[])sheet.GetProperties2();
+            double scale1 = props.Length > 2 && props[2] > 0 ? props[2] : 1;
+            double scale2 = props.Length > 3 && props[3] > 0 ? props[3] : 1;
+            bool firstAngle = props.Length <= 4 || props[4] == 1;
+
+            log($"  Sheet format: {Path.GetFileName(formatPath)} " +
+                $"({size.WidthMeters * 1000:F0}×{size.HeightMeters * 1000:F0} mm).");
+            log($"    slddrt: {formatPath}");
+
+            bool ok = drawing.SetupSheet6(
+                sheet.GetName(),
+                (int)size.Paper,
+                (int)swDwgTemplates_e.swDwgTemplateCustom,
+                scale1,
+                scale2,
+                firstAngle,
+                formatPath,
+                size.WidthMeters,
+                size.HeightMeters,
+                "Default",
+                true,
+                0, 0, 0, 0, 0, 0);
+
+            if (!ok)
+            {
+                log("  Warning: SetupSheet6 returned false — sheet format unchanged.");
+                return false;
+            }
+
+            model.ForceRebuild3(true);
+            return true;
+        }
+
+        /// <summary>
+        /// Reads the last <c>A0</c>–<c>A4</c> token in the file name.
+        /// <c>L</c> is landscape, <c>P</c> is portrait; a bare size (for example <c>A1</c>) is landscape.
+        /// </summary>
+        internal static bool TryParsePaperSize(string formatPath, out SheetFormatSize size)
+        {
+            size = default;
+            string name = Path.GetFileNameWithoutExtension(formatPath);
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            System.Text.RegularExpressions.MatchCollection matches =
+                System.Text.RegularExpressions.Regex.Matches(
+                    name,
+                    @"(?:^|[^A-Za-z0-9])A([0-4])([LPlp])?(?![A-Za-z0-9])");
+            if (matches.Count == 0)
+                return false;
+
+            System.Text.RegularExpressions.Match match = matches[^1];
+            int series = match.Groups[1].Value[0] - '0';
+            bool portrait = match.Groups[2].Success &&
+                            (match.Groups[2].Value[0] == 'P' || match.Groups[2].Value[0] == 'p');
+
+            (double landscapeWidth, double landscapeHeight, swDwgPaperSizes_e paper) = series switch
+            {
+                0 => (1.189, 0.841, swDwgPaperSizes_e.swDwgPaperA0size),
+                1 => (0.841, 0.594, swDwgPaperSizes_e.swDwgPaperA1size),
+                2 => (0.594, 0.420, swDwgPaperSizes_e.swDwgPaperA2size),
+                3 => (0.420, 0.297, swDwgPaperSizes_e.swDwgPaperA3size),
+                _ => (0.297, 0.210, portrait
+                    ? swDwgPaperSizes_e.swDwgPaperA4sizeVertical
+                    : swDwgPaperSizes_e.swDwgPaperA4size)
+            };
+
+            size = new SheetFormatSize(
+                paper,
+                portrait ? landscapeHeight : landscapeWidth,
+                portrait ? landscapeWidth : landscapeHeight);
+            return true;
+        }
+
         public static bool IsBaffleFamily(PartAnalysisResult analysis, DrawingRouteDecision route) =>
             route.ForcedFlatPlateSubKind == FlatPlateSubKind.BafflePlate ||
             analysis.FlatPlateSubKind == FlatPlateSubKind.BafflePlate ||

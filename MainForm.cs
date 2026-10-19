@@ -90,6 +90,17 @@ namespace SolidWorksTester
                 return;
             }
 
+            string sheetFormatPath = _view.SheetFormatTextBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(sheetFormatPath) && !File.Exists(sheetFormatPath))
+            {
+                MessageBox.Show(this,
+                    "Sheet format file was not found. Choose an existing .SLDDRT, or clear the field to keep the template border.",
+                    "Sheet Format Required",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             if (_view.TaskManager.TaskCount == 0)
             {
                 MessageBox.Show(this,
@@ -228,7 +239,7 @@ namespace SolidWorksTester
                                 taskLog("");
                                 taskLog($"=== [{i + 1}/{queue.Count}] {task.PartPath} ===");
                                 ProcessPartOutcome outcome = service.ProcessPart(
-                                    swApp, task.PartPath, templatePath, taskLog);
+                                    swApp, task.PartPath, templatePath, sheetFormatPath, taskLog);
 
                                 if (outcome == ProcessPartOutcome.SkippedFastener)
                                 {
@@ -367,6 +378,7 @@ namespace SolidWorksTester
             _view.RunButton.Enabled = !isRunning;
             _view.CancelButton.Enabled = isRunning;
             _view.TemplateTextBox.Enabled = !isRunning;
+            _view.SheetFormatTextBox.Enabled = !isRunning;
             _view.AddFilesButton.Enabled = !isRunning;
             _view.AddFolderButton.Enabled = !isRunning;
             _view.RemoveButton.Enabled = !isRunning;

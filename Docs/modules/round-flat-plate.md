@@ -52,7 +52,7 @@ Strategies (in order of attempt):
 
 Skips views named `Drawing View4` (isometric).
 
-**Known test cases:** EST-P61261 (PLATE 5×D84), EST-P61339.
+**Known shapes:** thin round plate (for example 5 × D84) and similar discs.
 
 ---
 

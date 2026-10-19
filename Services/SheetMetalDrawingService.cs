@@ -16,7 +16,12 @@ namespace SolidWorksTester.Services
 
     public sealed class SheetMetalDrawingService
     {
-        public ProcessPartOutcome ProcessPart(ISldWorks swApp, string partPath, string templatePath, Action<string> log)
+        public ProcessPartOutcome ProcessPart(
+            ISldWorks swApp,
+            string partPath,
+            string templatePath,
+            string? sheetFormatPath,
+            Action<string> log)
         {
             if (!File.Exists(partPath))
                 throw new FileNotFoundException("Part file not found.", partPath);
@@ -61,7 +66,7 @@ namespace SolidWorksTester.Services
                 try
                 {
                     partTimer.Measure("process drawing model", () =>
-                        ProcessDrawingModel(swApp, model, partPath, analysis, log));
+                        ProcessDrawingModel(swApp, model, partPath, analysis, sheetFormatPath, log));
                     partTimer.Measure("save drawing", () =>
                         SaveDrawingToPath(model, drawingPath, log));
                 }
@@ -89,7 +94,7 @@ namespace SolidWorksTester.Services
             }
 
             partTimer.Measure("open and process drawing", () =>
-                OpenAndProcessDrawing(swApp, partPath, drawingPath, analysis, log));
+                OpenAndProcessDrawing(swApp, partPath, drawingPath, analysis, sheetFormatPath, log));
             return ProcessPartOutcome.Completed;
         }
 
@@ -98,6 +103,7 @@ namespace SolidWorksTester.Services
             string partPath,
             string drawingPath,
             PartAnalysisResult analysis,
+            string? sheetFormatPath,
             Action<string> log)
         {
             int errors = 0;
@@ -117,7 +123,7 @@ namespace SolidWorksTester.Services
             try
             {
                 log("Drawing opened.");
-                ProcessDrawingModel(swApp, model, partPath, analysis, log);
+                ProcessDrawingModel(swApp, model, partPath, analysis, sheetFormatPath, log);
                 SaveDrawingToPath(model, drawingPath, log);
             }
             finally
@@ -133,6 +139,7 @@ namespace SolidWorksTester.Services
             IModelDoc2 model,
             string partPath,
             PartAnalysisResult analysis,
+            string? sheetFormatPath,
             Action<string> log)
         {
             model.Extension.SetUserPreferenceInteger(
@@ -141,7 +148,7 @@ namespace SolidWorksTester.Services
                 (int)swUnitSystem_e.swUnitSystem_MMGS);
 
             DrawingRouteDecision route = DrawingPipelineRouter.Resolve(analysis, log);
-            DrawingPipelineExecutor.Execute(swApp, model, partPath, analysis, route, log);
+            DrawingPipelineExecutor.Execute(swApp, model, partPath, analysis, route, log, sheetFormatPath);
         }
 
         private static void SaveDrawingToPath(IModelDoc2 model, string drawingPath, Action<string> log)

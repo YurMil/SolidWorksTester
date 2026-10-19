@@ -2,7 +2,7 @@
 
 [← Documentation hub](../README.md) · [Flat-plate sub-kinds](../drawing/flat-plate-subkinds.md) · [Flat plate pipeline (P-01)](../drawing/pipeline-flat-plate.md)
 
-Specialised annotation for **annular-sector / ring-segment** flat plates: two concentric arcs plus radial end faces (e.g. EST-P61728 `PLATE - 4 x 1022 x 1661.7`). Not a hollow tube, not a rounded-end sliver.
+Specialised annotation for **annular-sector / ring-segment** flat plates: two concentric arcs plus radial end faces (for example a plate 4 × 1022 × 1661.7 mm). Not a hollow tube, not a rounded-end sliver.
 
 **Folder:** `ArcSector/`  
 **Namespace:** `SolidWorksTester.ArcSector`  

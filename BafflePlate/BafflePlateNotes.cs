@@ -6,13 +6,13 @@ using SolidWorksTester.Services.Analysis;
 namespace SolidWorksTester.BafflePlate
 {
     /// <summary>
-    /// Sheet-level general notes for baffle / tube-sheet family (EST reference style).
+    /// Sheet-level general notes for baffle / tube-sheet family.
     /// </summary>
     internal static class BafflePlateNotes
     {
         /// <summary>
         /// Places a multi-line general note above the title block.
-        /// Related hole-pattern drawing id comes from EST props when present.
+        /// A related hole-pattern drawing id is included only when the part properties already have one.
         /// </summary>
         public static void InsertFamilyNotes(
             IModelDoc2 model,
@@ -67,15 +67,8 @@ namespace SolidWorksTester.BafflePlate
 
         private static string ResolveHolePatternDrawingRef(PartAnalysisResult? analysis)
         {
-            if (analysis?.EstProperties == null)
-                return "EST-P91559";
-
-            string? id = analysis.EstProperties.IdNumber;
-            if (!string.IsNullOrWhiteSpace(id) &&
-                id.Contains("P91559", StringComparison.OrdinalIgnoreCase))
-                return id.Trim();
-
-            return "EST-P91559";
+            string? id = analysis?.EstProperties?.IdNumber;
+            return string.IsNullOrWhiteSpace(id) ? "" : id.Trim();
         }
     }
 }

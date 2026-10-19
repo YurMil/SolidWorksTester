@@ -33,8 +33,7 @@ bin\Release\net9.0-windows\SolidWorksTester.exe
 ## First run checklist
 
 1. Launch SOLIDWORKS **or** let the app start it (same UAC level as the app).
-2. Confirm default template path exists or browse to your `.DRWDOT`:
-   `C:\EST\91_SW Setup\Templates\DRAWING.DRWDOT`
+2. Enter the drawing template (`.DRWDOT` / `.SLDDRW`) and, if needed, the sheet format (`.SLDDRT`). Both fields are empty until saved for this Windows user.
 3. Add one or more `.SLDPRT` files to the list.
 4. Click **Generate** — watch the log panel.
 5. Output: `{PartFolder}\{PartName}.SLDDRW`

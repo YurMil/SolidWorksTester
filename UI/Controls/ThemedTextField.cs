@@ -35,11 +35,13 @@ namespace SolidWorksTester.UI.Controls
                 ForeColor = UiTheme.TextPrimary,
                 Font = UiTheme.AppFont,
                 Text = initialText ?? string.Empty,
-                ShortcutsEnabled = false
+                ReadOnly = false,
+                ShortcutsEnabled = true
             };
 
             _inner.GotFocus += (_, _) => { _focused = true; Invalidate(); };
             _inner.LostFocus += (_, _) => { _focused = false; Invalidate(); };
+            MouseDown += (_, _) => _inner.Focus();
 
             Controls.Add(_inner);
         }

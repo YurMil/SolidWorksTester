@@ -8,7 +8,7 @@ namespace SolidWorksTester.ArcSector
 {
     /// <summary>
     /// Detects flat annular-sector plates: two large concentric arcs + radial end edges
-    /// (e.g. EST-P61728 — not a tube, not a rounded-end sliver).
+    /// (not a tube, not a rounded-end sliver).
     /// </summary>
     internal static class ArcSectorViewAnalyzer
     {

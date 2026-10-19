@@ -7,7 +7,7 @@ public class SymmetryMirrorTests
     [Fact]
     public void FourHoleRectangle_IsBiSymmetric()
     {
-        // Centers like EST-P61356 layout (sheet units arbitrary).
+        // Centers of a rectangular hole layout (sheet units arbitrary).
         var pts = new (double X, double Y)[]
         {
             (10, 10),

@@ -74,10 +74,11 @@ The drawing pipeline later references the part by **file path** when creating vi
 | Input | Source | Used for |
 | --- | --- | --- |
 | `partPath` | UI list box | Analysis, view creation, output folder |
-| `templatePath` | UI text field | New drawing from `.DRWDOT` or copied `.SLDDRW` |
+| `templatePath` | UI text field, restored from the user temp cache | New drawing from `.DRWDOT` or copied `.SLDDRW` |
+| `sheetFormatPath` | UI text field, same cache | `.SLDDRT` applied before views are created |
 | `drawingPath` | Derived from part | Save target |
 
-Default template (UI initial value): `AppMetadata.DefaultTemplatePath`.
+Cache file: `%TEMP%\SolidWorksTester\paths.json`. Missing file means both paths are blank.
 
 ---
 

@@ -1,7 +1,6 @@
 # Baffle plate drawing pipeline
 
-Dedicated nested flat-plate route for sheet-metal **baffle / tube-sheet** plates with dense hole arrays
-(reference: EST-P91112, drawing `EST-P91112_r01_BAFFLE PLATE 3 - 6 x D2375`).
+Dedicated nested flat-plate route for sheet-metal **baffle / tube-sheet** plates with dense hole arrays.
 
 ## Detection
 
